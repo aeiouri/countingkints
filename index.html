@@ -289,35 +289,101 @@ function loadLocal(uidKey) {
 const saveLocal = () => { try { localStorage.setItem(LS, JSON.stringify(projects)); } catch (e) {} };
 const saveUI = () => { try { localStorage.setItem(LSUI, JSON.stringify(ui)); } catch (e) {} };
 
-let col = null, syncState = 'local', flushT = null;
+let syncOn = false, syncState = 'local', flushT = null, retryT = null, flushing = null, chan = null;
 const dirty = new Set();
 function setSync(s) { syncState = s; const el = $('#syncline'); if (el) el.textContent = syncText(); }
 function syncText() {
   return ({
-    local: '기록은 아직 이 기기에만 저장돼요 · 기기 간 동기화는 곧 연결돼요',
-    synced: '내 계정에 동기화됨 · 다른 기기에서도 이어서 쓸 수 있어요',
+    local: '기록은 이 기기에 저장돼요',
     slow: '동기화 서버에 연결 중이에요 · 기록은 이 기기에 먼저 저장돼요',
-    error: '동기화에 실패했어요 · 기록은 이 기기에 저장돼 있어요'
+    synced: '내 계정에 동기화됨 · 다른 기기에서도 이어서 쓸 수 있어요',
+    error: '지금은 동기화가 안 돼요 · 기록은 이 기기에 저장돼 있고, 연결되면 자동으로 올라가요'
   })[syncState];
 }
+/* 지운 프로젝트 목록 (오프라인에서 지워도 나중에 서버에서도 지우도록 기억) */
+const delKey = () => 'knit.pendingDel:' + (me ? me.id : '');
+function getDel() { try { return JSON.parse(localStorage.getItem(delKey()) || '[]'); } catch (e) { return []; } }
+function setDel(a) { try { localStorage.setItem(delKey(), JSON.stringify(a)); } catch (e) {} }
+
 function touch(p) {
   p.u = Date.now(); saveLocal();
-  if (col) { dirty.add(p.id); clearTimeout(flushT); flushT = setTimeout(flush, 700); }
+  if (syncOn) { dirty.add(p.id); clearTimeout(flushT); flushT = setTimeout(flush, 700); }
 }
 async function flush() {
-  if (!col) return;
-  for (const id of [...dirty]) {
-    dirty.delete(id);
-    const p = projects[id]; if (!p) continue;
-    try { await col.doc('p_' + id).set(clone(p)); setSync('synced'); } catch (e) { setSync('error'); }
-  }
+  if (!syncOn || !sb || !me) return;
+  if (flushing) { await flushing; if (!dirty.size && !getDel().length) return; }
+  flushing = (async () => {
+    let failed = false;
+    const rows = [...dirty].filter(id => projects[id]).map(id => ({ user_id: me.id, id, data: clone(projects[id]), updated_at: projects[id].u || Date.now(), deleted: false }));
+    const dels = getDel();
+    const delRows = dels.map(d => ({ user_id: me.id, id: d.id, data: { id: d.id }, updated_at: d.t, deleted: true }));
+    const all = rows.concat(delRows);
+    if (all.length) {
+      rows.forEach(r => dirty.delete(r.id));
+      [...dirty].forEach(id => { if (!projects[id]) dirty.delete(id); });
+      try {
+        const { error } = await sb.from('projects').upsert(all, { onConflict: 'user_id,id' });
+        if (error) throw error;
+        if (delRows.length) setDel(getDel().filter(d => !dels.some(x => x.id === d.id && x.t === d.t)));
+      } catch (e) { failed = true; rows.forEach(r => dirty.add(r.id)); }
+    }
+    setSync(failed ? 'error' : 'synced');
+    clearTimeout(retryT); if (failed) retryT = setTimeout(flush, 30000);
+  })();
+  try { await flushing; } finally { flushing = null; }
 }
-function removeRemote(id) { if (col) col.doc('p_' + id).delete().catch(() => {}); }
-document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
+function removeRemote(id) {
+  if (!me) return;
+  dirty.delete(id);
+  setDel(getDel().filter(d => d.id !== id).concat([{ id, t: Date.now() }]));
+  if (syncOn) flush();
+}
+/* 서버에서 받은 한 줄을 이 기기 기록과 합치기: 더 최근에 바뀐 쪽이 이겨요 */
+function mergeRow(r) {
+  if (!r || !r.id) return false;
+  const l = projects[r.id], rt = Number(r.updated_at) || 0, lt = l ? (l.u || 0) : 0;
+  if (r.deleted) {
+    if (l && rt >= lt) { delete projects[r.id]; dirty.delete(r.id); if (ui.active === r.id) { ui.active = null; saveUI(); } return true; }
+    if (l && lt > rt) dirty.add(r.id);
+    return false;
+  }
+  if (getDel().some(d => d.id === r.id)) return false;
+  if (!l || rt > lt) { const d = clone(r.data); d.u = rt; projects[r.id] = d; dirty.delete(r.id); return true; }
+  if (lt > rt) dirty.add(r.id);
+  return false;
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); else if (sb && me) pull(); });
+window.addEventListener('online', () => { if (sb && me) pull(); });
 
+async function pull() {
+  if (!sb || !me) return false;
+  try {
+    const { data, error } = await sb.from('projects').select('id,data,updated_at,deleted');
+    if (error) throw error;
+    const remote = new Set(); let changed = false;
+    (data || []).forEach(r => { remote.add(r.id); if (mergeRow(r)) changed = true; });
+    Object.keys(projects).forEach(k => { if (!remote.has(k)) dirty.add(k); });
+    if (changed) { saveLocal(); onRemoteChange(); }
+    syncOn = true;
+    await flush();
+    return true;
+  } catch (e) { setSync('error'); clearTimeout(retryT); retryT = setTimeout(pull, 30000); return false; }
+}
 async function startSync() {
-  /* 다음 단계에서 Supabase 동기화를 여기에 연결해요. 지금은 이 기기에만 저장해요. */
   try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) {}
+  if (!sb || !me) return;
+  const slowT = setTimeout(() => { if (syncState !== 'synced') setSync('slow'); }, 8000);
+  await pull();
+  clearTimeout(slowT);
+  try {
+    if (chan) sb.removeChannel(chan);
+    chan = sb.channel('projects-' + me.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: 'user_id=eq.' + me.id }, payload => {
+        const r = payload.new && payload.new.id ? payload.new : null;
+        if (r && mergeRow(r)) { saveLocal(); onRemoteChange(); }
+      })
+      .subscribe(st => { if (st === 'SUBSCRIBED') pull(); });
+  } catch (e) {}
 }
 
 /* ---------- 도안 파일 (이 기기 IndexedDB) ---------- */
