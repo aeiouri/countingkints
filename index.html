@@ -206,6 +206,15 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .x{min-width:40px;height:40px;border:0;background:none;color:var(--muted);font-size:18px;border-radius:10px}
 .x:active{background:var(--line)}
 .x:disabled{opacity:.25}
+.authwrap{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:24px 16px calc(24px + env(safe-area-inset-bottom,0px));background:var(--paper);overflow-y:auto}
+.authcard{width:100%;max-width:400px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px 20px}
+.authcard h1{margin:0 0 4px;font:400 26px var(--display)}
+.authcard .lead{margin:0 0 20px;color:var(--muted);font-size:14px}
+.authcard .btn{width:100%;margin-top:4px}
+.authcard .err{min-height:20px;margin:10px 0 0;font-size:14px;color:var(--danger)}
+.authcard .link{display:block;width:100%;margin-top:14px;padding:8px;border:0;background:none;color:var(--accent);font-size:14px;text-decoration:underline}
+.codeinp{font-size:26px;letter-spacing:8px;text-align:center}
+.userline{font-size:13px;color:var(--muted);margin:-12px 0 18px}
 #toast{position:fixed;left:50%;transform:translate(-50%,12px);bottom:calc(env(safe-area-inset-bottom,0px) + 100px);z-index:80;display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:14px;background:var(--ink);color:var(--paper);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:92%}
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .tbtn{border:0;background:none;color:var(--hl);font-weight:700;min-height:32px;padding:0 4px}
@@ -216,6 +225,7 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 <div id="app"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
 <script>
 (() => {
 'use strict';
@@ -259,11 +269,23 @@ const MARK = [null, '#FF6FA8', '#8ED62A', '#FF9A1F', '#3DB8FF'];
 const MARK_NAME = [null, '분홍', '연두', '주황', '하늘'];
 
 /* ---------- 저장소 (이 기기 + 로그인 시 동기화) ---------- */
-const LS = 'knit.counter.v1', LSUI = 'knit.counter.ui.v1';
+const LS0 = 'knit.counter.v1', LSUI0 = 'knit.counter.ui.v1';
+let LS = LS0, LSUI = LSUI0;
 let projects = {}, ui = { active: null, part: {}, zoom: {} };
-try { projects = JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch (e) { projects = {}; }
-try { ui = Object.assign(ui, JSON.parse(localStorage.getItem(LSUI) || '{}')); } catch (e) {}
-ui.part = ui.part || {}; ui.zoom = ui.zoom || {};
+function loadLocal(uidKey) {
+  LS = LS0 + ':' + uidKey; LSUI = LSUI0 + ':' + uidKey;
+  try {
+    /* 로그인 전에 이 기기에서 만든 기록은 처음 로그인한 계정으로 옮겨요 */
+    if (localStorage.getItem(LS) == null && localStorage.getItem(LS0) != null) {
+      localStorage.setItem(LS, localStorage.getItem(LS0)); localStorage.removeItem(LS0);
+      if (localStorage.getItem(LSUI0) != null) { localStorage.setItem(LSUI, localStorage.getItem(LSUI0)); localStorage.removeItem(LSUI0); }
+    }
+  } catch (e) {}
+  projects = {}; ui = { active: null, part: {}, zoom: {} };
+  try { projects = JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch (e) { projects = {}; }
+  try { ui = Object.assign(ui, JSON.parse(localStorage.getItem(LSUI) || '{}')); } catch (e) {}
+  ui.part = ui.part || {}; ui.zoom = ui.zoom || {};
+}
 const saveLocal = () => { try { localStorage.setItem(LS, JSON.stringify(projects)); } catch (e) {} };
 const saveUI = () => { try { localStorage.setItem(LSUI, JSON.stringify(ui)); } catch (e) {} };
 
@@ -272,7 +294,7 @@ const dirty = new Set();
 function setSync(s) { syncState = s; const el = $('#syncline'); if (el) el.textContent = syncText(); }
 function syncText() {
   return ({
-    local: '이 기기에만 저장돼요 · 기기 간 동기화는 다음 단계에서 연결돼요',
+    local: '기록은 아직 이 기기에만 저장돼요 · 기기 간 동기화는 곧 연결돼요',
     synced: '내 계정에 동기화됨 · 다른 기기에서도 이어서 쓸 수 있어요',
     slow: '동기화 서버에 연결 중이에요 · 기록은 이 기기에 먼저 저장돼요',
     error: '동기화에 실패했어요 · 기록은 이 기기에 저장돼 있어요'
@@ -501,10 +523,11 @@ function buildHome() {
   const list = Object.values(projects).sort((a, b) => (lastActivity(b) || b.u) - (lastActivity(a) || a.u));
   const app = $('#app');
   app.replaceChildren(
-    h('div', { class: 'top' }, h('h1', {}, '뜨개 단수 카운터')),
+    h('div', { class: 'top' }, h('h1', { style: 'flex:1' }, '뜨개 단수 카운터'), me ? h('button', { class: 'btn sm', onclick: logout }, '로그아웃') : null),
     h('div', { class: 'scroll' },
       h('p', { class: 'hero' }, '지금 뜨는 단에 ', h('span', { class: 'hlmark' }, '형광펜'), '을 칠해 드려요'),
       h('p', { class: 'sync', id: 'syncline' }, syncText()),
+      me && me.email ? h('p', { class: 'userline' }, me.email + ' 계정') : null,
       list.length ? list.map(p => {
         const la = lastActivity(p);
         return h('button', { class: 'pcard', onclick: () => { ui.active = p.id; saveUI(); route(); } },
@@ -1329,9 +1352,119 @@ function openPrep(pid, partId) {
   }
 }
 
-/* ---------- 시작 ---------- */
-route();
-startSync();
+/* ---------- 로그인 ---------- */
+const SB_URL = 'https://twekjvqyivgbmluaujhl.supabase.co';
+const SB_KEY = 'sb_publishable_LiZ4xRILT4hJu0sjwZuDUA_ruPlJjTO';
+const SB_FN = 'rapid-processor'; /* 초대 코드 확인 서버 함수 이름 */
+let sb = null, me = null;
+
+function enter(user) {
+  me = { id: user.id, email: user.email };
+  try { localStorage.setItem('knit.lastUser', JSON.stringify(me)); } catch (e) {}
+  const w = $('.authwrap'); if (w) w.remove();
+  loadLocal(user.id); route(); startSync();
+}
+async function logout() {
+  if (!await askConfirm('로그아웃할까요? 이 기기의 기록은 그대로 남아 있어요.', '로그아웃')) return;
+  try { await flush(); } catch (e) {}
+  try { await sb.auth.signOut(); } catch (e) {}
+  try { localStorage.removeItem('knit.lastUser'); } catch (e) {}
+  location.reload();
+}
+function showLogin(startView) {
+  const wrap = h('div', { class: 'authwrap' }), card = h('div', { class: 'authcard' });
+  wrap.append(card); document.body.append(wrap);
+  let email = '';
+  const err = h('p', { class: 'err', role: 'alert' });
+  const busy = (btn, on, label) => { btn.disabled = on; if (label) btn.textContent = label; };
+  async function sendCode(addr) {
+    const { error } = await sb.auth.signInWithOtp({ email: addr, options: { shouldCreateUser: false } });
+    if (!error) return 'ok';
+    const m = (error.message || '').toLowerCase();
+    if (error.status === 429 || m.includes('rate') || m.includes('seconds')) return 'rate';
+    if (m.includes('signup') || m.includes('not found') || m.includes('not allowed')) return 'nouser';
+    return 'fail';
+  }
+  const msg = r => ({ rate: '요청이 많아요. 1분쯤 뒤에 다시 시도해 주세요.', nouser: '가입되지 않은 이메일이에요. 아래 “초대 코드로 가입하기”로 먼저 가입해 주세요.', fail: '코드를 보내지 못했어요. 잠시 뒤 다시 시도해 주세요.' })[r];
+  const validEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+  function viewLogin() {
+    const ein = h('input', { class: 'inp', type: 'email', autocomplete: 'email', inputmode: 'email', placeholder: '이메일 주소' }); ein.value = email;
+    const go = h('button', { class: 'btn pri', type: 'submit' }, '로그인 코드 받기');
+    const form = h('form', { onsubmit: async e => {
+      e.preventDefault(); email = ein.value.trim().toLowerCase(); err.textContent = '';
+      if (!validEmail(email)) { err.textContent = '이메일 주소를 확인해 주세요.'; return; }
+      busy(go, true, '보내는 중…'); const r = await sendCode(email); busy(go, false, '로그인 코드 받기');
+      if (r === 'ok') viewCode(); else err.textContent = msg(r);
+    } }, h('div', { class: 'field' }, h('label', {}, '이메일'), ein), go);
+    card.replaceChildren(h('h1', {}, '뜨개 단수 카운터'), h('p', { class: 'lead' }, '가입한 이메일로 6자리 로그인 코드를 보내 드려요.'), form, err,
+      h('button', { class: 'link', type: 'button', onclick: () => { err.textContent = ''; viewJoin(); } }, '처음이에요 · 초대 코드로 가입하기'));
+    setTimeout(() => ein.focus(), 50);
+  }
+  function viewJoin() {
+    const cin = h('input', { class: 'inp', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', placeholder: '받은 초대 코드' });
+    const ein = h('input', { class: 'inp', type: 'email', autocomplete: 'email', inputmode: 'email', placeholder: '사용할 이메일 주소' }); ein.value = email;
+    const go = h('button', { class: 'btn pri', type: 'submit' }, '가입하고 코드 받기');
+    const form = h('form', { onsubmit: async e => {
+      e.preventDefault(); err.textContent = '';
+      const code = cin.value.replace(/\s+/g, '').toLowerCase(); email = ein.value.trim().toLowerCase();
+      if (!code) { err.textContent = '초대 코드를 입력해 주세요.'; return; }
+      if (!validEmail(email)) { err.textContent = '이메일 주소를 확인해 주세요.'; return; }
+      busy(go, true, '확인하는 중…');
+      let res = 'error';
+      try {
+        const r = await fetch(SB_URL + '/functions/v1/' + SB_FN, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SB_KEY }, body: JSON.stringify({ code, email }) });
+        const j = await r.json().catch(() => ({})); res = j.result || (r.status === 401 ? 'auth' : 'error');
+      } catch (e2) { res = 'network'; }
+      if (res === 'ok') {
+        busy(go, true, '코드 보내는 중…'); const r2 = await sendCode(email); busy(go, false, '가입하고 코드 받기');
+        if (r2 === 'ok') viewCode(); else err.textContent = msg(r2);
+        return;
+      }
+      busy(go, false, '가입하고 코드 받기');
+      err.textContent = ({ bad: '초대 코드가 맞지 않아요.', locked: '틀린 시도가 많아서 잠시 막혔어요. 1시간 뒤에 다시 시도해 주세요.', bad_request: '이메일 주소를 확인해 주세요.', network: '서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.', auth: '가입 서버 설정을 확인해야 해요. (관리자: 함수의 JWT 확인 끄기)' })[res] || '가입 처리 중 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요.';
+    } }, h('div', { class: 'field' }, h('label', {}, '초대 코드'), cin), h('div', { class: 'field' }, h('label', {}, '이메일'), ein), go);
+    card.replaceChildren(h('h1', {}, '초대 코드로 가입'), h('p', { class: 'lead' }, '받은 초대 코드와 사용할 이메일을 넣어 주세요. 가입되면 그 이메일로 로그인 코드가 가요.'), form, err,
+      h('button', { class: 'link', type: 'button', onclick: () => { err.textContent = ''; viewLogin(); } }, '이미 가입했어요 · 로그인하기'));
+    setTimeout(() => cin.focus(), 50);
+  }
+  function viewCode() {
+    const tin = h('input', { class: 'inp codeinp', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '10', placeholder: '••••••' });
+    const go = h('button', { class: 'btn pri', type: 'submit' }, '로그인');
+    const form = h('form', { onsubmit: async e => {
+      e.preventDefault(); err.textContent = '';
+      const token = tin.value.replace(/\D/g, '');
+      if (token.length < 6) { err.textContent = '메일로 받은 숫자 코드를 모두 입력해 주세요.'; return; }
+      busy(go, true, '확인하는 중…');
+      const { data, error } = await sb.auth.verifyOtp({ email, token, type: 'email' });
+      busy(go, false, '로그인');
+      if (error || !data || !data.session) { err.textContent = '코드가 맞지 않거나 만료됐어요. 다시 확인하거나 코드를 새로 받아 주세요.'; return; }
+      enter(data.session.user);
+    } }, h('div', { class: 'field' }, h('label', {}, '로그인 코드'), tin), go);
+    const again = h('button', { class: 'link', type: 'button', onclick: async () => {
+      err.textContent = ''; again.disabled = true; const r = await sendCode(email); again.disabled = false;
+      err.textContent = r === 'ok' ? '' : msg(r); if (r === 'ok') toast('코드를 다시 보냈어요');
+    } }, '코드 다시 받기');
+    card.replaceChildren(h('h1', {}, '메일을 확인해 주세요'), h('p', { class: 'lead' }, `${email} 으로 로그인 코드를 보냈어요. 메일이 안 보이면 스팸함도 확인해 주세요.`), form, err, again,
+      h('button', { class: 'link', type: 'button', onclick: () => { err.textContent = ''; viewLogin(); } }, '이메일 바꾸기'));
+    setTimeout(() => tin.focus(), 50);
+  }
+  (startView === 'join' ? viewJoin : viewLogin)();
+}
+async function boot() {
+  if (!window.supabase || !window.supabase.createClient) {
+    /* 오프라인 등으로 로그인 도구를 못 불러온 경우: 이 기기에서 마지막으로 로그인한 계정 기록만 열어요 */
+    let last = null; try { last = JSON.parse(localStorage.getItem('knit.lastUser') || 'null'); } catch (e) {}
+    if (last && last.id) { me = last; loadLocal(last.id); route(); setSync('error'); toast('인터넷에 연결되지 않아 이 기기 기록만 보여요'); return; }
+    document.body.append(h('div', { class: 'authwrap' }, h('div', { class: 'authcard' }, h('h1', {}, '연결이 필요해요'), h('p', { class: 'lead' }, '처음 로그인하려면 인터넷 연결이 필요해요. 연결을 확인하고 다시 열어 주세요.'))));
+    return;
+  }
+  sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'knit.auth' } });
+  let session = null;
+  try { session = (await sb.auth.getSession()).data.session; } catch (e) {}
+  if (session && session.user) enter(session.user); else showLogin();
+}
+boot();
 })();
 </script>
 </body>
