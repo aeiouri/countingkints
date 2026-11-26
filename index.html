@@ -607,7 +607,8 @@ function ranges(ch) {
   const base = { page: ch.page || 1, crop: ch.crop, rowStart: rStart(ch), rows: ch.rows || 1, fromTop: !!ch.fromTop };
   return [base, ...(ch.extra || []).map(e => ({ page: e.page || ch.page || 1, crop: e.crop, rowStart: e.rowStart || 1, rows: e.rows || 1, fromTop: e.fromTop != null ? !!e.fromTop : !!ch.fromTop }))];
 }
-function isSplit(ch) { return !!(ch && ch.split && ch.split.on && !ch.free && !multiOf(ch)); }
+function isSplit(ch) { return !!(ch && ch.split && ch.split.on && !ch.free && multiOf(ch) !== 'seq'); }
+function dispRegion(ch) { if (multiOf(ch) === 'together') { let x0 = 1, y0 = 1, x1 = 0, y1 = 0; [...ranges(ch).map(r => r.crop), ch.view].filter(Boolean).forEach(c => { x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + c.h); }); return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; } return ch.view || ch.crop; }
 const multiOf = ch => (ch && ch.extra && ch.extra.length && !ch.free) ? (ch.multi === 'seq' ? 'seq' : 'together') : null;
 function span(ch) { const m = multiOf(ch); if (!m) return ch.rows; const R = ranges(ch); return m === 'seq' ? R.reduce((a, r) => a + r.rows, 0) : Math.max(...R.map(r => r.rows)); }
 function togLocal(ch, r, k) { const N = r.rows; if (k <= N || ch.short !== 'repeat') return { row: k, cycle: 1, done: k > N }; return { row: ((k - 1) % N) + 1, cycle: Math.floor((k - 1) / N) + 1, done: false }; }
@@ -941,7 +942,7 @@ function buildTracker(p, part, host) {
   curUI.tools.replaceChildren(...tools);
 
   async function loadSplit(pt) {
-    const ch = pt.chart, reg = ch.view || ch.crop, cr = ch.crop, sy = clamp(ch.split.y == null ? .5 : ch.split.y, .05, .95), ft = !!ch.fromTop;
+    const ch = pt.chart, reg = dispRegion(ch), R = ranges(ch), sy = clamp(ch.split.y == null ? .5 : ch.split.y, .05, .95), ft = !!ch.fromTop;
     const pieces = ft ? [[0, sy], [sy, 1]] : [[sy, 1], [0, sy]];
     const src = await ensureSource(p); if (T !== ctx) return;
     if (!src) { chartWrap.replaceChildren(h('div', { class: 'empty' }, '도안 파일을 불러오지 못했어요.')); return; }
@@ -953,13 +954,17 @@ function buildTracker(p, part, host) {
       out.push({ c, rect, y0, y1 });
     }
     if (T !== ctx) return;
-    boxes = out.map(({ c, rect, y0, y1 }, j) => {
-      const t = h('div', { class: 'tint' }), l = h('div', { class: 'hl' }), done = h('div', { class: 'rdone', hidden: true });
+    boxes = []; const panes = [];
+    out.forEach(({ c, rect, y0, y1 }, j) => {
       c.style.width = '100%'; c.style.height = 'auto'; c.style.display = 'block';
-      const box = h('div', { class: 'cbox', style: `left:${(cr.x - rect.x) / rect.w * 100}%;top:${(cr.y - rect.y) / rect.h * 100}%;width:${cr.w / rect.w * 100}%;height:${cr.h / rect.h * 100}%` }, h('div', { class: 'ov' }, t, l), done);
-      return { i: 0, r: { rows: ch.rows, fromTop: ft, rowStart: rStart(ch) }, tint: t, hl: l, done, split: j, y0, y1, pane: h('div', { class: 'splitpane' }, c, box) };
+      const pane = h('div', { class: 'splitpane' }, c); panes.push(pane);
+      R.forEach((r, i) => {
+        const cr = r.crop, t = h('div', { class: 'tint' }), l = h('div', { class: 'hl' }), done = h('div', { class: 'rdone', hidden: true }, h('span', {}, '완료')), tag = h('i', { class: 'rtag' }, String(i + 1));
+        const box = h('div', { class: 'cbox', style: `left:${(cr.x - rect.x) / rect.w * 100}%;top:${(cr.y - rect.y) / rect.h * 100}%;width:${cr.w / rect.w * 100}%;height:${cr.h / rect.h * 100}%` }, h('div', { class: 'ov' }, t, l), done, R.length > 1 ? tag : null);
+        pane.append(box); boxes.push({ i, r, tint: t, hl: l, done, tag, split: j, y0, y1, pane });
+      });
     });
-    inner.replaceChildren(h('div', { class: 'splitrow', style: `align-items:${ft ? 'flex-start' : 'flex-end'}` }, ...boxes.map(b => b.pane)));
+    inner.replaceChildren(h('div', { class: 'splitrow', style: `align-items:${ft ? 'flex-start' : 'flex-end'}` }, ...panes));
     chartWrap.querySelector('.loading')?.remove(); inner.hidden = false; layoutChart(); scrollToRow(false);
   }
   async function loadChart() {
@@ -1118,10 +1123,15 @@ function buildTracker(p, part, host) {
     const pt = PT(); if (!pt) return;
     const m = multiOf(pt.chart);
     if (isSplit(pt.chart) && boxes && boxes[0] && boxes[0].split != null) {
-      const ch = pt.chart, k = pt.cur - rStart(ch) + 1, N = ch.rows, reg = ch.view || ch.crop;
-      boxes.forEach(b => { paintBox(b, k); b.done.hidden = true; });
-      const idx = ch.fromTop ? k - 1 : N - k, rel = (ch.crop.y + ch.crop.h * (idx + .5) / N - reg.y) / reg.h;
-      const live = boxes.find(b => rel >= b.y0 && rel < b.y1) || boxes[0]; hl = live.hl; return;
+      const ch = pt.chart, k = pt.cur - rStart(ch) + 1, reg = dispRegion(ch), fin = k > span(ch), tog = multiOf(ch) === 'together';
+      let pick = null;
+      boxes.forEach(b => {
+        const q = fin ? { row: b.r.rows + 1, cycle: 1, done: !tog ? false : true } : tog ? togLocal(ch, b.r, k) : { row: k, cycle: 1, done: false };
+        paintBox(b, q.done ? b.r.rows + 1 : q.row); b.done.hidden = !(tog && q.done);
+        if (tog) b.tag.textContent = (b.i + 1) + (q.cycle > 1 ? ` · ${q.cycle}회차` : '');
+        if (!q.done && !fin && !pick) { const idx = b.r.fromTop ? q.row - 1 : b.r.rows - q.row, rel = (b.r.crop.y + b.r.crop.h * (idx + .5) / b.r.rows - reg.y) / reg.h; if (rel >= b.y0 && rel < b.y1) pick = b; }
+      });
+      hl = (pick || boxes[0]).hl; return;
     }
     if (m && boxes) {
       if (m === 'seq') { const q = seqIndex(pt.chart, pt.cur); if (q.i !== shownIdx) { loadChart(); return; } paintBox(boxes[0], q.local + 1); hl = boxes[0].hl; }
@@ -1326,7 +1336,7 @@ function openSetup(pid, partId) {
   holderBox.append(ov, othersEl, viewEl, rectEl, cellEl, splitLine);
   splitLine.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation(); splitLine.setPointerCapture && splitLine.setPointerCapture(e.pointerId);
-    const move = ev => { const rc = holderBox.getBoundingClientRect(), reg = d.chart.view || d.chart.crop, py = (ev.clientY - rc.top) / rc.height; d.chart.split.y = clamp((py - reg.y) / reg.h, .05, .95); drawRect(); };
+    const move = ev => { const rc = holderBox.getBoundingClientRect(), reg = dispRegion(Object.assign({}, d.chart, { multi: d.chart.extra.length ? 'together' : undefined })), py = (ev.clientY - rc.top) / rc.height; d.chart.split.y = clamp((py - reg.y) / reg.h, .05, .95); drawRect(); };
     const up = () => { splitLine.removeEventListener('pointermove', move); splitLine.removeEventListener('pointerup', up); splitLine.removeEventListener('pointercancel', up); };
     splitLine.addEventListener('pointermove', move); splitLine.addEventListener('pointerup', up); splitLine.addEventListener('pointercancel', up);
   });
@@ -1396,7 +1406,7 @@ function openSetup(pid, partId) {
     h('button', { class: 'btn sm', type: 'button', 'aria-label': '확대', onclick: () => setCZ(1) }, '＋')));
   const freeSeg = seg([[false, '격자 자동'], [true, '직접 그리기']], () => !!d.chart.free, v => { d.chart.free = v; vis(); drawGrid(); });
   const freeField = h('div', { class: 'field' }, h('label', {}, '하이라이트 방식'), freeSeg, h('p', { class: 'hint' }, '격자 자동은 네모 칸 차트용이에요. 직접 그리기는 저장한 뒤 도안 화면의 ‘하이라이트 편집’에서 단마다 모양을 그려요(코바늘 차트 등).'));
-  const helpBox = h('p', { class: 'hint', hidden: true }, '가장자리 막대를 끌면 그 면의 크기가 바뀌고, 가운데 ✥ 손잡이를 끌면 범위 전체가 움직여요. 도안의 빈 곳을 끌면 도안이 움직이고, 두 손가락으로 확대·축소해요(컴퓨터는 －/＋ 버튼이나 Ctrl+휠). 단 번호·범례는 빼고 차트 칸만 감싸 주세요. ‘차트 밖도 같이 보기’를 켜면 파랑 범위로 유의사항 같은 주변 부분도 배경처럼 보여요. 체크는 분홍 범위에서만 돼요.');
+  const helpBox = h('p', { class: 'hint', hidden: true }, '가장자리 막대나 모서리를 끌면 크기가 바뀌고, 범위 안쪽을 끌면 범위 전체가 움직여요. 범위 바깥을 끌면 도안이 움직이고, 두 손가락으로 확대·축소해요(컴퓨터는 －/＋ 버튼이나 Ctrl+휠). 단 번호·범례는 빼고 차트 칸만 감싸 주세요. ‘차트 밖도 같이 보기’를 켜면 파랑 범위로 유의사항 같은 주변 부분도 배경처럼 보여요. 체크는 분홍 범위에서만 돼요.');
   const helpLine = h('p', { class: 'hint' }, '분홍 범위를 차트 칸 바깥 테두리에 맞춰 주세요.', h('button', { class: 'qbtn', type: 'button', 'aria-label': '범위 잡는 방법 자세히 보기', onclick: () => { helpBox.hidden = !helpBox.hidden; } }, '?'));
   const rangeBar = h('div', { class: 'pager', style: 'margin-bottom:8px' });
   const multiHint = h('p', { class: 'hint' });
@@ -1442,8 +1452,8 @@ function openSetup(pid, partId) {
   const splitField = h('div', { class: 'field' }, h('label', {}, '세로로 긴 차트 나눠 보기'), splitSeg, splitHint);
   function updSplit() {
     const on = !!(d.chart.split && d.chart.split.on);
-    splitField.hidden = !!d.chart.free || d.chart.extra.length > 0 || sel > 0;
-    splitHint.textContent = on ? '도안 위 보라색 점선을 위아래로 끌어서 나눌 위치를 정해요. 점선 아래쪽과 위쪽이 도안 화면에서 왼쪽·오른쪽으로 나란히 보여요.' + (d.chart.view ? ' 파랑 범위를 기준으로 나눠요.' : '') : '세로로 긴 차트를 두 부분으로 잘라 나란히 보여줘요. 가로 화면에서 보기 좋아요.';
+    splitField.hidden = !!d.chart.free || (d.chart.extra.length > 0 && d.chart.multi === 'seq');
+    splitHint.textContent = on ? '도안 위 보라색 점선을 위아래로 끌어서 나눌 위치를 정해요. 점선 아래쪽과 위쪽이 도안 화면에서 왼쪽·오른쪽으로 나란히 보여요.' + (d.chart.extra.length ? ' 범위 여러 개를 모두 감싸는 영역을 기준으로 나눠요.' : d.chart.view ? ' 파랑 범위를 기준으로 나눠요.' : '') : '세로로 긴 차트를 두 부분으로 잘라 나란히 보여줘요. 가로 화면에서 보기 좋아요.';
   }
   const symInfo = h('p', { class: 'hint' });
   const symBtn = h('button', { class: 'btn', type: 'button', onclick: runSym }, '기호 인식하기');
@@ -1489,7 +1499,7 @@ function openSetup(pid, partId) {
   }
   function drawRect() {
     const c = E().crop;
-    { const on = !!(d.chart.split && d.chart.split.on) && !d.chart.free && !d.chart.extra.length && sel === 0, reg = d.chart.view || d.chart.crop;
+    { const on = !!(d.chart.split && d.chart.split.on) && !d.chart.free && !(d.chart.extra.length && d.chart.multi === 'seq') && (E().page || 1) === (d.chart.page || 1), reg = dispRegion(Object.assign({}, d.chart, { multi: d.chart.extra.length ? 'together' : undefined }));
       splitLine.hidden = !on; if (on) { const y = d.chart.split.y == null ? .5 : d.chart.split.y; Object.assign(splitLine.style, { left: reg.x * 100 + '%', width: reg.w * 100 + '%', top: (reg.y + y * reg.h) * 100 + '%' }); } }
     othersEl.replaceChildren(...[d.chart, ...d.chart.extra].map((x, k) => (k === sel || (x.page || d.chart.page || 1) !== (E().page || 1)) ? null : h('div', { class: 'orect', style: `left:${x.crop.x * 100}%;top:${x.crop.y * 100}%;width:${x.crop.w * 100}%;height:${x.crop.h * 100}%` }, h('b', {}, '범위 ' + (k + 1)))).filter(Boolean));
     rectEl.style.cssText = `left:${c.x * 100}%;top:${c.y * 100}%;width:${c.w * 100}%;height:${c.h * 100}%`;
@@ -1513,8 +1523,8 @@ function openSetup(pid, partId) {
     if (lockUntilUp) return;
     const [px, py, rc] = rel2(e), c = R();
     
-    const onMove = Math.hypot((px - (c.x + c.w / 2)) * rc.width, (py - (c.y + c.h / 2)) * rc.height) <= 24;
-    const mode = measuring ? 'cell' : onMove ? 'm' : edgeAt(px, py, rc, c);
+    const edge = measuring ? null : edgeAt(px, py, rc, c), inside = px > c.x && px < c.x + c.w && py > c.y && py < c.y + c.h;
+    const mode = measuring ? 'cell' : edge ? edge : inside ? 'm' : null;
     drag = mode === 'cell' ? { mode, sx: px, sy: py } : mode === 'm' ? { mode, ox: px - c.x, oy: py - c.y } : mode ? { mode } : { mode: 'pan', cx: e.clientX, cy: e.clientY, sl: holder.scrollLeft, st: holder.scrollTop };
     drag.snapView = d.chart.view ? clone(d.chart.view) : null; drag.snapCrop = clone(E().crop); drag.snapCell = d.chart.cell ? clone(d.chart.cell) : null; drag.snapSet = E().cropSet;
     ov.setPointerCapture(e.pointerId); e.preventDefault();
@@ -1524,7 +1534,7 @@ function openSetup(pid, partId) {
     if (gest) { moveGesture(); return; }
     if (lockUntilUp) return;
     const [px, py, rc] = rel2(e), c = R();
-    if (!drag) { const onM = Math.hypot((px - (c.x + c.w / 2)) * rc.width, (py - (c.y + c.h / 2)) * rc.height) <= 24; const hit = measuring ? null : onM ? 'm' : edgeAt(px, py, rc, c); ov.style.cursor = hit === 'm' ? 'move' : hit === 'tl' || hit === 'br' ? 'nwse-resize' : hit === 'tr' || hit === 'bl' ? 'nesw-resize' : hit ? (hit === 't' || hit === 'b' ? 'ns-resize' : 'ew-resize') : 'grab'; return; }
+    if (!drag) { const eg = measuring ? null : edgeAt(px, py, rc, c), hit = eg || (!measuring && px > c.x && px < c.x + c.w && py > c.y && py < c.y + c.h ? 'm' : null); ov.style.cursor = hit === 'm' ? 'move' : hit === 'tl' || hit === 'br' ? 'nwse-resize' : hit === 'tr' || hit === 'bl' ? 'nesw-resize' : hit ? (hit === 't' || hit === 'b' ? 'ns-resize' : 'ew-resize') : 'grab'; return; }
     if (drag.mode === 'pan') { holder.scrollLeft = drag.sl - (e.clientX - drag.cx); holder.scrollTop = drag.st - (e.clientY - drag.cy); ov.style.cursor = 'grabbing'; return; }
     let n;
     if (drag.mode === 'cell') { d.chart.cell = { x: Math.min(drag.sx, px), y: Math.min(drag.sy, py), w: Math.abs(px - drag.sx), h: Math.abs(py - drag.sy) }; drawCell(); drawGrid(); return; }
@@ -1607,7 +1617,7 @@ function openSetup(pid, partId) {
         if (d.chart.multi !== 'seq') x.page = d.chart.page; }
       if (!d.chart.extra.length) delete d.chart.multi;
       if (d.chart.split && d.chart.split.on) {
-        if (d.chart.extra.length || d.chart.free) d.chart.split.on = false;
+        if (d.chart.free || (d.chart.extra.length && d.chart.multi === 'seq')) d.chart.split.on = false;
         else if (d.chart.split.y == null) d.chart.split.y = .5;
       }
     } else {
