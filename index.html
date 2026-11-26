@@ -54,8 +54,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .ci1 b{font-size:26px;font-weight:400;margin-right:2px}
 .ci2{font-size:12px;color:var(--muted);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .btn.on{background:var(--ink);color:var(--paper)}
-.splitrow{display:flex;gap:14px;padding-top:18px}
-.splitpane{position:relative;flex:1;min-width:0;background:#fff}
+.splitrow{display:flex;gap:14px}
+.splitpane{position:relative;flex:1;min-width:0;background:#fff;overflow:hidden}
+.splitline{position:absolute;height:24px;margin-top:-12px;cursor:ns-resize;touch-action:none;z-index:5;background:linear-gradient(transparent 10px,#7B3FE4 10px,#7B3FE4 13px,transparent 13px);background-size:100% 100%}
+.splitline::before{content:'';position:absolute;left:0;right:0;top:10px;height:3px;background:repeating-linear-gradient(90deg,#fff 0 6px,transparent 6px 12px)}
+.splitline span{position:absolute;right:0;top:-8px;transform:translateY(-100%);background:#7B3FE4;color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;white-space:nowrap}
 .rdone{position:absolute;inset:0;background:rgba(120,120,120,.55);display:flex;align-items:center;justify-content:center;pointer-events:none}
 .rdone span{background:#fff;color:#555;font-size:12px;font-weight:700;padding:2px 8px;border-radius:8px}
 .rtag{position:absolute;left:0;top:0;transform:translateY(-100%);background:#E0336B;color:#fff;font-size:11px;font-style:normal;font-weight:700;padding:1px 6px;border-radius:6px 6px 0 0;pointer-events:none}
@@ -230,8 +233,9 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .userline{font-size:13px;color:var(--muted);margin:-12px 0 18px}
 .symrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .fthumb{flex:none;border:1px solid var(--line);border-radius:6px;background:#fff;image-rendering:pixelated}
-.ci3{font-size:13px;line-height:1.4;margin-top:3px;color:var(--ink);cursor:pointer;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.ci3 .chip{display:inline-block;font-size:11px;font-weight:700;padding:0 6px;border-radius:8px;margin-right:4px;background:var(--paper);border:1px solid var(--line)}
+.ci3{font-size:13px;line-height:1.35;margin-top:2px;color:var(--ink);cursor:pointer}
+.ci3 div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci3 b{font-weight:700}
 .menuitem.on{font-weight:700}
 #toast{position:fixed;left:50%;transform:translate(-50%,12px);bottom:calc(env(safe-area-inset-bottom,0px) + 100px);z-index:80;display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:14px;background:var(--ink);color:var(--paper);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:92%}
 #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -915,11 +919,12 @@ function buildTracker(p, part, host) {
     inner.addEventListener('click', e => {
       const pt = PT(); if (!pt || ctx.markEdit || pt.chart.free) return;
       const m = multiOf(pt.chart), R = ranges(pt.chart);
-      const cand = (m || isSplit(pt.chart)) ? (boxes || []).map(b => ({ i: b.i, el: b.tint.parentElement.parentElement, sy: b.sy })) : [{ i: 0, el: cbox }];
-      const hit = cand.find(x => { const q = x.el.getBoundingClientRect(); return e.clientX >= q.left && e.clientX < q.right && e.clientY >= q.top && e.clientY < q.bottom; });
+      const cand = (m || isSplit(pt.chart)) ? (boxes || []).map(b => ({ i: b.i, el: b.tint.parentElement.parentElement, clip: b.pane })) : [{ i: 0, el: cbox }];
+      const inR = (q) => e.clientX >= q.left && e.clientX < q.right && e.clientY >= q.top && e.clientY < q.bottom;
+      const hit = cand.find(x => inR(x.el.getBoundingClientRect()) && (!x.clip || inR(x.clip.getBoundingClientRect())));
       if (!hit) return; const i = hit.i, bx = hit.el;
       const S = i === 0 ? pt.chart.sym : (pt.chart.extra[i - 1] || {}).sym; if (!S || S.basis !== symBasis(R[i])) return;
-      const rc = bx.getBoundingClientRect(), fx = (e.clientX - rc.left) / rc.width; let fy = (e.clientY - rc.top) / rc.height; if (hit.sy) fy = hit.sy[0] + fy * (hit.sy[1] - hit.sy[0]);
+      const rc = bx.getBoundingClientRect(), fx = (e.clientX - rc.left) / rc.width; const fy = (e.clientY - rc.top) / rc.height;
       const c = S.xs.findIndex((v, k) => k < S.xs.length - 1 && fx >= v && fx < S.xs[k + 1]), rr = S.ys.findIndex((v, k) => k < S.ys.length - 1 && fy >= v && fy < S.ys[k + 1]);
       if (c < 0 || rr < 0) return;
       const cl = S.clusters[S.rowsTop[rr].charCodeAt(c) - 48]; if (cl) showSymbol(cl.sym);
@@ -936,24 +941,23 @@ function buildTracker(p, part, host) {
   curUI.tools.replaceChildren(...tools);
 
   async function loadSplit(pt) {
-    const ch = pt.chart, N = ch.rows, rs = rStart(ch), a = clamp((ch.split.at | 0) - rs + 1, 1, N - 1), cr = ch.crop, ft = !!ch.fromTop;
-    const parts = [ft ? [0, a / N] : [1 - a / N, 1], ft ? [a / N, 1] : [0, 1 - a / N]];
+    const ch = pt.chart, reg = ch.view || ch.crop, cr = ch.crop, sy = clamp(ch.split.y == null ? .5 : ch.split.y, .05, .95), ft = !!ch.fromTop;
+    const pieces = ft ? [[0, sy], [sy, 1]] : [[sy, 1], [0, sy]];
     const src = await ensureSource(p); if (T !== ctx) return;
     if (!src) { chartWrap.replaceChildren(h('div', { class: 'empty' }, '도안 파일을 불러오지 못했어요.')); return; }
-    const cvs = [];
-    for (const [y0, y1] of parts) {
-      const rect = { x: cr.x, y: cr.y + y0 * cr.h, w: cr.w, h: (y1 - y0) * cr.h }, key = [pt.id, ch.page, ch.rot || 0, 'split', rect.x.toFixed(4), rect.y.toFixed(4), rect.w.toFixed(4), rect.h.toFixed(4)].join('|');
+    const out = [];
+    for (const [y0, y1] of pieces) {
+      const rect = { x: reg.x, y: reg.y + y0 * reg.h, w: reg.w, h: (y1 - y0) * reg.h }, key = [pt.id, ch.page, ch.rot || 0, 'split', rect.x.toFixed(4), rect.y.toFixed(4), rect.w.toFixed(4), rect.h.toFixed(4)].join('|');
       let c = chartCache.get(key);
       if (!c) { try { c = await renderRegion(src, ch.page, rect, 1600, ch.rot); } catch (e) { chartWrap.replaceChildren(h('div', { class: 'empty' }, '도안을 그리지 못했어요.')); return; } if (chartCache.size > 6) chartCache.delete(chartCache.keys().next().value); chartCache.set(key, c); }
-      cvs.push(c);
+      out.push({ c, rect, y0, y1 });
     }
     if (T !== ctx) return;
-    const rowsN = [a, N - a], starts = [rs, rs + a];
-    boxes = cvs.map((c, j) => {
-      const t = h('div', { class: 'tint' }), l = h('div', { class: 'hl' }), done = h('div', { class: 'rdone', hidden: true }), tag = h('i', { class: 'rtag' }, `${starts[j]}~${starts[j] + rowsN[j] - 1}단`);
+    boxes = out.map(({ c, rect, y0, y1 }, j) => {
+      const t = h('div', { class: 'tint' }), l = h('div', { class: 'hl' }), done = h('div', { class: 'rdone', hidden: true });
       c.style.width = '100%'; c.style.height = 'auto'; c.style.display = 'block';
-      const box = h('div', { class: 'cbox', style: 'left:0;top:0;width:100%;height:100%' }, h('div', { class: 'ov' }, t, l), done, tag);
-      return { i: 0, r: { rows: rowsN[j], fromTop: ft, rowStart: starts[j] }, tint: t, hl: l, done, tag, sy: parts[j], split: j, pane: h('div', { class: 'splitpane' }, c, box) };
+      const box = h('div', { class: 'cbox', style: `left:${(cr.x - rect.x) / rect.w * 100}%;top:${(cr.y - rect.y) / rect.h * 100}%;width:${cr.w / rect.w * 100}%;height:${cr.h / rect.h * 100}%` }, h('div', { class: 'ov' }, t, l), done);
+      return { i: 0, r: { rows: ch.rows, fromTop: ft, rowStart: rStart(ch) }, tint: t, hl: l, done, split: j, y0, y1, pane: h('div', { class: 'splitpane' }, c, box) };
     });
     inner.replaceChildren(h('div', { class: 'splitrow', style: `align-items:${ft ? 'flex-start' : 'flex-end'}` }, ...boxes.map(b => b.pane)));
     chartWrap.querySelector('.loading')?.remove(); inner.hidden = false; layoutChart(); scrollToRow(false);
@@ -1114,10 +1118,10 @@ function buildTracker(p, part, host) {
     const pt = PT(); if (!pt) return;
     const m = multiOf(pt.chart);
     if (isSplit(pt.chart) && boxes && boxes[0] && boxes[0].split != null) {
-      const k = pt.cur - rStart(pt.chart) + 1, [A, B] = boxes;
-      paintBox(A, Math.min(k, A.r.rows + 1)); A.done.hidden = true;
-      paintBox(B, k - A.r.rows); B.done.hidden = true;
-      hl = k <= A.r.rows ? A.hl : B.hl; return;
+      const ch = pt.chart, k = pt.cur - rStart(ch) + 1, N = ch.rows, reg = ch.view || ch.crop;
+      boxes.forEach(b => { paintBox(b, k); b.done.hidden = true; });
+      const idx = ch.fromTop ? k - 1 : N - k, rel = (ch.crop.y + ch.crop.h * (idx + .5) / N - reg.y) / reg.h;
+      const live = boxes.find(b => rel >= b.y0 && rel < b.y1) || boxes[0]; hl = live.hl; return;
     }
     if (m && boxes) {
       if (m === 'seq') { const q = seqIndex(pt.chart, pt.cur); if (q.i !== shownIdx) { loadChart(); return; } paintBox(boxes[0], q.local + 1); hl = boxes[0].hl; }
@@ -1178,9 +1182,7 @@ function buildTracker(p, part, host) {
         cl && cl.s ? ' ' : null, cl && cl.s ? h('span', { class: 'dirchip' }, `${cl.s}코`) : null].filter(x => x !== null));
     }
     const infos = fin ? [] : rowInfoFor(pt, r);
-    c3.hidden = !infos.length; c3.replaceChildren(...infos.flatMap((t, i) => [i ? h('br') : null,
-      t.tag || null, h('span', { class: 'chip' }, `총 ${t.st}코`), t.delta ? h('span', { class: 'chip' }, (t.delta > 0 ? '늘림 +' : '줄임 ') + t.delta + '코') : null, t.cable ? h('span', { class: 'chip' }, '케이블') : null,
-      t.text].filter(Boolean)));
+    c3.hidden = !infos.length; c3.replaceChildren(...infos.map(t => h('div', {}, t.tag || '', h('b', {}, `${t.st}코`), t.delta ? ` (${t.delta > 0 ? '+' : ''}${t.delta})` : '', ' · ', t.text)));
     c3.onclick = () => modal(`${r}단 뜨는 법`, infos.map(t => h('p', {}, (t.tag ? h('b', {}, t.tag) : ''), `총 ${t.st}코 · `, t.text, t.delta ? ` (콧수 ${t.delta > 0 ? '+' : ''}${t.delta})` : '')), [{ label: '닫기', cls: 'pri', val: null }]);
     const le = lastLog(pt);
     ctx.lastT = le ? le.t : null; ctx.relEl = null; c2.replaceChildren();
@@ -1320,7 +1322,14 @@ function openSetup(pid, partId) {
   const cellEl = h('div', { class: 'cellrect', hidden: true });
   const viewEl = h('div', { class: 'viewrect', hidden: true });
   const othersEl = h('div', { style: 'position:absolute;inset:0;pointer-events:none' });
-  holderBox.append(ov, othersEl, viewEl, rectEl, cellEl);
+  const splitLine = h('div', { class: 'splitline', hidden: true }, h('span', {}, '여기서 나눠요'));
+  holderBox.append(ov, othersEl, viewEl, rectEl, cellEl, splitLine);
+  splitLine.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation(); splitLine.setPointerCapture && splitLine.setPointerCapture(e.pointerId);
+    const move = ev => { const rc = holderBox.getBoundingClientRect(), reg = d.chart.view || d.chart.crop, py = (ev.clientY - rc.top) / rc.height; d.chart.split.y = clamp((py - reg.y) / reg.h, .05, .95); drawRect(); };
+    const up = () => { splitLine.removeEventListener('pointermove', move); splitLine.removeEventListener('pointerup', up); splitLine.removeEventListener('pointercancel', up); };
+    splitLine.addEventListener('pointermove', move); splitLine.addEventListener('pointerup', up); splitLine.addEventListener('pointercancel', up);
+  });
   let editing = 'crop';
   const R = () => (editing === 'view' && sel === 0 && d.chart.view) ? d.chart.view : E().crop;
   const edBtns = {
@@ -1428,17 +1437,13 @@ function openSetup(pid, partId) {
     if (!await askConfirm(`이 범위(범위 ${sel + 1})를 지울까요?`, '지우기', true)) return;
     d.chart.extra.splice(sel - 1, 1); chainSeq(); selectRange(sel - 1);
   }
-  const splitAt = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', style: 'max-width:110px', oninput: e => { d.chart.split = Object.assign(d.chart.split || {}, { at: parseInt(e.target.value, 10) || 0 }); updSplit(); } });
-  const splitSeg = seg([[false, '한 화면'], [true, '둘로 나눠 보기']], () => !!(d.chart.split && d.chart.split.on), v => { d.chart.split = Object.assign(d.chart.split || {}, { on: v }); if (v && !d.chart.split.at) d.chart.split.at = d.chart.rowStart + Math.ceil((d.chart.rows || 2) / 2) - 1; splitAt.value = d.chart.split.at || ''; updSplit(); });
-  const splitHint = h('p', { class: 'hint' }), splitRow = h('div', { class: 'row2', style: 'gap:8px;align-items:center;margin-top:8px' }, h('span', { class: 'small muted' }, '앞쪽 마지막 단'), splitAt);
-  const splitField = h('div', { class: 'field' }, h('label', {}, '세로로 긴 차트 나눠 보기'), splitSeg, splitRow, splitHint);
-  splitAt.value = (d.chart.split && d.chart.split.at) || '';
+  const splitSeg = seg([[false, '한 화면'], [true, '둘로 나눠 보기']], () => !!(d.chart.split && d.chart.split.on), v => { d.chart.split = Object.assign(d.chart.split || {}, { on: v }); if (d.chart.split.y == null) d.chart.split.y = .5; updSplit(); drawRect(); });
+  const splitHint = h('p', { class: 'hint' });
+  const splitField = h('div', { class: 'field' }, h('label', {}, '세로로 긴 차트 나눠 보기'), splitSeg, splitHint);
   function updSplit() {
     const on = !!(d.chart.split && d.chart.split.on);
-    splitField.hidden = !!d.chart.free || d.chart.extra.length > 0 || sel > 0; splitRow.hidden = !on;
-    if (!on) { splitHint.textContent = '세로로 긴 차트를 두 부분으로 잘라 나란히 보여줘요. 가로 화면에서 보기 좋아요.'; return; }
-    const at = d.chart.split.at, rs = d.chart.rowStart, re = d.chart.rowEnd;
-    splitHint.textContent = (at >= rs && at < re) ? `${rs}~${at}단과 ${at + 1}~${re}단이 나란히 보여요.` : `${rs}~${re - 1} 사이의 단 번호를 넣어 주세요.`;
+    splitField.hidden = !!d.chart.free || d.chart.extra.length > 0 || sel > 0;
+    splitHint.textContent = on ? '도안 위 보라색 점선을 위아래로 끌어서 나눌 위치를 정해요. 점선 아래쪽과 위쪽이 도안 화면에서 왼쪽·오른쪽으로 나란히 보여요.' + (d.chart.view ? ' 파랑 범위를 기준으로 나눠요.' : '') : '세로로 긴 차트를 두 부분으로 잘라 나란히 보여줘요. 가로 화면에서 보기 좋아요.';
   }
   const symInfo = h('p', { class: 'hint' });
   const symBtn = h('button', { class: 'btn', type: 'button', onclick: runSym }, '기호 인식하기');
@@ -1484,6 +1489,8 @@ function openSetup(pid, partId) {
   }
   function drawRect() {
     const c = E().crop;
+    { const on = !!(d.chart.split && d.chart.split.on) && !d.chart.free && !d.chart.extra.length && sel === 0, reg = d.chart.view || d.chart.crop;
+      splitLine.hidden = !on; if (on) { const y = d.chart.split.y == null ? .5 : d.chart.split.y; Object.assign(splitLine.style, { left: reg.x * 100 + '%', width: reg.w * 100 + '%', top: (reg.y + y * reg.h) * 100 + '%' }); } }
     othersEl.replaceChildren(...[d.chart, ...d.chart.extra].map((x, k) => (k === sel || (x.page || d.chart.page || 1) !== (E().page || 1)) ? null : h('div', { class: 'orect', style: `left:${x.crop.x * 100}%;top:${x.crop.y * 100}%;width:${x.crop.w * 100}%;height:${x.crop.h * 100}%` }, h('b', {}, '범위 ' + (k + 1)))).filter(Boolean));
     rectEl.style.cssText = `left:${c.x * 100}%;top:${c.y * 100}%;width:${c.w * 100}%;height:${c.h * 100}%`;
     const vw = d.chart.view; viewEl.hidden = !vw; viewOff.hidden = !vw; if (vw) viewEl.style.cssText = `left:${vw.x * 100}%;top:${vw.y * 100}%;width:${vw.w * 100}%;height:${vw.h * 100}%`;
@@ -1601,7 +1608,7 @@ function openSetup(pid, partId) {
       if (!d.chart.extra.length) delete d.chart.multi;
       if (d.chart.split && d.chart.split.on) {
         if (d.chart.extra.length || d.chart.free) d.chart.split.on = false;
-        else if (!(d.chart.split.at >= d.chart.rowStart && d.chart.split.at < d.chart.rowEnd)) { setTab(2); return showErr(`나눠 보기의 단 번호를 ${d.chart.rowStart}~${d.chart.rowEnd - 1} 사이로 넣어 주세요.`); }
+        else if (d.chart.split.y == null) d.chart.split.y = .5;
       }
     } else {
       d.text.lines = parseText(d.text.raw, d.needle === 'crochet');
