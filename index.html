@@ -54,6 +54,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .ci1 b{font-size:26px;font-weight:400;margin-right:2px}
 .ci2{font-size:12px;color:var(--muted);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .btn.on{background:var(--ink);color:var(--paper)}
+.rdone{position:absolute;inset:0;background:rgba(120,120,120,.55);display:flex;align-items:center;justify-content:center;pointer-events:none}
+.rdone span{background:#fff;color:#555;font-size:12px;font-weight:700;padding:2px 8px;border-radius:8px}
+.rtag{position:absolute;left:0;top:0;transform:translateY(-100%);background:#E0336B;color:#fff;font-size:11px;font-style:normal;font-weight:700;padding:1px 6px;border-radius:6px 6px 0 0;pointer-events:none}
+.orect{position:absolute;outline:2px dashed rgba(224,51,107,.7);outline-offset:-1px;pointer-events:none}
+.orect b{position:absolute;left:0;top:0;background:#E0336B;color:#fff;font-size:11px;padding:1px 6px;border-radius:0 0 6px 0}
 .viewrect{position:absolute;outline:2px dashed #1E88E5;outline-offset:-1px;background:rgba(30,136,229,.08);pointer-events:none}
 .viewrect .hd{background:#1E88E5}
 .cbox{position:absolute;pointer-events:none}
@@ -153,6 +158,9 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .sheet.tall{height:94%;max-height:94%}
 .sheethead{display:flex;align-items:center;padding:6px 8px 6px 18px;background:var(--card);border-bottom:1px solid var(--line)}
 .sheethead h2{flex:1;margin:0;font:400 20px var(--display)}
+.stabs{display:flex;gap:6px;padding:8px 16px;background:var(--card);border-bottom:1px solid var(--line)}
+.stabs button{flex:1;min-height:44px;padding:8px;border:1.5px solid var(--line);border-radius:12px;background:none;color:var(--muted);font:inherit;font-size:15px}
+.stabs button.on{border-color:var(--ink);color:var(--ink);font-weight:700;background:var(--paper)}
 .sheetbody{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 24px}
 .sheetfoot{display:flex;gap:8px;padding:10px 12px;background:var(--card);border-top:1px solid var(--line)}
 .sheetfoot .btn{flex:1}
@@ -172,6 +180,7 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .radios{display:flex;flex-direction:column;gap:0}
 .rad{display:flex;align-items:center;gap:8px;min-height:34px;font-size:14px;cursor:pointer}
 .rad input{width:18px;height:18px;margin:0;accent-color:var(--accent);flex:none}
+.qbtn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-left:4px;padding:0;border:1.5px solid var(--muted);border-radius:50%;background:none;color:var(--muted);font-size:13px;font-weight:700;vertical-align:middle;cursor:pointer}
 .hint{font-size:13px;color:var(--muted);margin:6px 0 0}
 .err{color:var(--danger);font-size:14px;margin:8px 0 0}
 .preview{margin:-4px 0 16px;padding:8px 12px;border-radius:10px;background:var(--accent-soft);color:var(--accent);font-size:14px;line-height:1.6}
@@ -180,7 +189,7 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .sheet.wide{max-width:1100px}
 .cropbox{position:relative;width:100%;background:#fff;border:1px solid var(--line);touch-action:none;user-select:none;-webkit-user-select:none}
 .cropbox canvas{display:block;width:100%;height:auto;pointer-events:none}
-.cropov{position:absolute;inset:0;touch-action:none;cursor:crosshair}
+.cropov{position:absolute;inset:0;touch-action:none;cursor:grab}
 .croprect{position:absolute;outline:2px solid #E0336B;outline-offset:-1px;background:rgba(224,51,107,.06);pointer-events:none}
 .cellrect{position:absolute;outline:2px solid #1E88E5;outline-offset:-1px;background:rgba(30,136,229,.3);pointer-events:none}
 .croprect svg{position:absolute;inset:0;width:100%;height:100%}
@@ -189,6 +198,7 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .hd{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#E0336B;border:3px solid #fff;pointer-events:none}
 .rowone{position:absolute;left:4px;padding:0 6px;border-radius:6px;background:#E0336B;color:#fff;font-size:12px;font-weight:700;pointer-events:none}
 .hd[data-k=t],.hd[data-k=b]{width:44px;height:10px;margin:-5px 0 0 -22px;border-radius:5px;border-width:2px}
+.hd[data-k=m]{width:34px;height:34px;margin:-17px 0 0 -17px;border-width:2px;opacity:.9;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;line-height:1;font-style:normal}
 .hd[data-k=l],.hd[data-k=r]{width:10px;height:44px;margin:-22px 0 0 -5px;border-radius:5px;border-width:2px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .tag{padding:2px 10px;border-radius:10px;background:var(--accent-soft);color:var(--accent);font-size:13px}
@@ -396,70 +406,138 @@ const idb = {
 };
 if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const sources = {};
+/* 도안 파일 기록: PDF는 { name, type, buf }, 사진은 { name, type: 'image/x-pages', pages: [{ type, buf }] } */
+const isPages = rec => !!(rec && rec.pages);
+async function loadImg(buf, type) {
+  const url = URL.createObjectURL(new Blob([buf], { type: type || 'image/jpeg' }));
+  try { return await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; }); }
+  finally { setTimeout(() => URL.revokeObjectURL(url), 60000); }
+}
 async function buildSource(rec) {
   try {
+    if (isPages(rec)) {
+      const imgs = [];
+      for (const pg of rec.pages) imgs.push(await loadImg(pg.buf, pg.type));
+      return { kind: 'imgs', imgs, n: imgs.length, stamp: rec.stamp || null };
+    }
     if (rec.type === 'application/pdf' || /\.pdf$/i.test(rec.name)) {
       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(rec.buf.slice(0)) }).promise;
-      return { kind: 'pdf', pdf, n: pdf.numPages };
+      return { kind: 'pdf', pdf, n: pdf.numPages, stamp: rec.stamp || null };
     }
-    const url = URL.createObjectURL(new Blob([rec.buf], { type: rec.type || 'image/png' }));
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-    return { kind: 'img', img, n: 1 };
+    const img = await loadImg(rec.buf, rec.type || 'image/png');
+    return { kind: 'imgs', imgs: [img], n: 1, stamp: rec.stamp || null };
   } catch (e) { console.error(e); return null; }
 }
-const cloudTried = {}, inflight = {};
+/* 사진을 적당한 크기의 JPEG로 줄이기 (긴 변 2400px) */
+async function shrinkPhoto(file) {
+  try {
+    const img = await loadImg(await file.arrayBuffer(), file.type);
+    const W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, 2400 / Math.max(W, H));
+    const c = document.createElement('canvas'); c.width = Math.round(W * k); c.height = Math.round(H * k);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', .85));
+    if (!blob) throw new Error('toBlob');
+    return { type: 'image/jpeg', buf: await blob.arrayBuffer() };
+  } catch (e) { return { type: file.type || 'image/jpeg', buf: await file.arrayBuffer() }; }
+}
+const inflight = {};
+async function cloudGet(cl) {
+  if (!sb || !me || !cl || !cl.paths || !cl.paths.length) return null;
+  try {
+    const bufs = [];
+    for (const path of cl.paths) { const { data, error } = await sb.storage.from('patterns').download(path); if (error || !data) return null; bufs.push(await data.arrayBuffer()); }
+    if (cl.kind === 'pages') return { name: cl.name, type: 'image/x-pages', pages: bufs.map(buf => ({ type: 'image/jpeg', buf })), stamp: cl.stamp };
+    return { name: cl.name, type: 'application/pdf', buf: bufs[0], stamp: cl.stamp };
+  } catch (e) { return null; }
+}
 async function ensureSource(p) {
-  if (sources[p.id] !== undefined && sources[p.id] !== null) return sources[p.id];
+  const cl = p.file && p.file.cloud;
+  const cur = sources[p.id];
+  if (cur && (!cl || cur.stamp === cl.stamp)) return cur;
   if (inflight[p.id]) return inflight[p.id];
   inflight[p.id] = (async () => {
     let rec = await idb.get(p.id);
+    if (cl && (!rec || rec.stamp !== cl.stamp)) {
+      const got = await cloudGet(cl);
+      if (got) { rec = got; await idb.put(p.id, rec); chartCache.clear(); toast('도안 파일을 내 계정에서 불러왔어요'); }
+    }
     sources[p.id] = rec ? await buildSource(rec) : null;
+    /* 예전에 이 기기에만 저장된 파일은 내 계정에도 올려 둬요 */
+    if (rec && p.file && !p.file.cloud) cloudSave(p, rec);
     return sources[p.id];
   })();
   try { return await inflight[p.id]; } finally { delete inflight[p.id]; }
 }
-async function getAssets() { return null; }
+const CLOUD_MAX = 50 * 1024 * 1024;
 async function cloudSave(p, rec) {
-  const assets = await getAssets(); if (!assets) return 'unavailable';
-  if (rec.buf.byteLength > 20 * 1024 * 1024) return 'toolarge';
+  if (!sb || !me) return 'unavailable';
+  const stamp = String(Date.now()), base = `${me.id}/${p.id}/${stamp}`;
+  const parts = isPages(rec) ? rec.pages.map((pg, i) => ({ path: `${base}-${i + 1}.jpg`, buf: pg.buf, type: 'image/jpeg' })) : [{ path: `${base}.pdf`, buf: rec.buf, type: 'application/pdf' }];
+  if (parts.some(x => x.buf.byteLength > CLOUD_MAX)) return 'toolarge';
+  const done = [];
   try {
-    const r = await assets.upload(new Blob([rec.buf], { type: rec.type || 'application/octet-stream' }));
-    p.file = Object.assign({}, p.file, { assetId: r.id, type: rec.type }); touch(p); return 'ok';
-  } catch (e) { return (e && e.code === 'too_large') ? 'toolarge' : 'fail'; }
+    for (const x of parts) {
+      const { error } = await sb.storage.from('patterns').upload(x.path, new Blob([x.buf], { type: x.type }), { contentType: x.type, upsert: true });
+      if (error) throw error; done.push(x.path);
+    }
+  } catch (e) { if (done.length) cloudDelete(done); return 'fail'; }
+  const old = p.file && p.file.cloud && p.file.cloud.paths;
+  rec.stamp = stamp; idb.put(p.id, rec); if (sources[p.id]) sources[p.id].stamp = stamp;
+  p.file = Object.assign({}, p.file, { cloud: { paths: done, kind: isPages(rec) ? 'pages' : 'pdf', name: rec.name, stamp } }); touch(p);
+  if (old && old.length) cloudDelete(old);
+  return 'ok';
 }
-async function cloudDelete(id) { try { const a = await getAssets(); if (a) await a.delete(id); } catch (e) {} }
-async function attachFile(p, file) {
-  const rec = { name: file.name, type: file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : ''), buf: await file.arrayBuffer() };
+async function cloudDelete(paths) { try { if (sb && paths && paths.length) await sb.storage.from('patterns').remove(paths); } catch (e) {} }
+/* files: 고른 파일 배열. 사진 여러 장은 페이지로 묶어요. opts.append: 기존 사진 뒤에 페이지 추가 */
+async function attachFile(p, files, opts = {}) {
+  files = (Array.isArray(files) ? files : [files]).filter(Boolean); if (!files.length) return false;
+  const pdf = files.find(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+  let rec;
+  if (pdf) rec = { name: pdf.name, type: 'application/pdf', buf: await pdf.arrayBuffer() };
+  else {
+    const imgs = files.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp|gif)$/i.test(f.name));
+    if (!imgs.length) { toast('PDF나 사진 파일을 선택해 주세요'); return false; }
+    toast('사진을 정리하는 중이에요…');
+    const pages = []; for (const f of imgs) pages.push(await shrinkPhoto(f));
+    let prev = null;
+    if (opts.append) { const old = await idb.get(p.id); if (isPages(old)) prev = old.pages; }
+    rec = { name: prev ? (p.file && p.file.name) || '사진 도안' : (imgs.length > 1 ? `사진 ${imgs.length}장` : imgs[0].name || '사진 도안'), type: 'image/x-pages', pages: (prev || []).concat(pages) };
+    if (prev) rec.name = `사진 ${rec.pages.length}장`;
+  }
   const saved = await idb.put(p.id, rec);
   const src = await buildSource(rec);
-  if (!src) { toast('이 파일은 열 수 없어요. PDF나 이미지 파일을 선택해 주세요'); return false; }
+  if (!src) { toast('이 파일은 열 수 없어요. PDF나 사진 파일을 선택해 주세요'); return false; }
   sources[p.id] = src; chartCache.clear();
-  const oldId = p.file && p.file.assetId;
-  p.file = { name: file.name, size: file.size, type: rec.type }; touch(p);
-  cloudSave(p, rec).then(r => { if (r === 'ok') { if (oldId) cloudDelete(oldId); toast('도안 파일을 클라우드에도 저장했어요'); } else if (r === 'toolarge') toast('파일이 20MB를 넘어서 이 기기에만 저장했어요'); });
-  if (!saved) toast('이 기기에 파일을 저장하지 못했어요 · 창을 닫으면 다시 선택해야 해요');
+  const size = isPages(rec) ? rec.pages.reduce((a, x) => a + x.buf.byteLength, 0) : rec.buf.byteLength;
+  const oldPaths = p.file && p.file.cloud && p.file.cloud.paths;
+  p.file = { name: rec.name, size, type: rec.type, kind: isPages(rec) ? 'pages' : 'pdf' }; touch(p);
+  cloudSave(p, rec).then(r => { if (r === 'ok' && oldPaths) cloudDelete(oldPaths); if (r === 'ok') toast('도안 파일을 내 계정에도 저장했어요 · 다른 기기에서도 열려요'); else if (r === 'toolarge') toast('파일이 50MB를 넘어서 이 기기에만 저장했어요'); else if (r === 'fail') toast('내 계정에 파일을 올리지 못했어요 · 다음에 열 때 다시 시도해요'); });
+  if (!saved) toast('이 기기에 파일을 저장하지 못했어요');
   return true;
 }
-function pickFile(accept) {
+function pickFile(accept, multiple) {
   return new Promise(res => {
     const i = h('input', { type: 'file', accept, style: 'position:fixed;left:-999px' });
-    i.addEventListener('change', () => { res(i.files[0] || null); i.remove(); });
+    if (multiple) i.multiple = true;
+    i.addEventListener('change', () => { const fs = [...(i.files || [])]; res(multiple ? (fs.length ? fs : null) : (fs[0] || null)); i.remove(); });
     document.body.append(i); i.click();
   });
 }
 const fitW = (outW, asp) => Math.max(200, Math.min(outW, 3000, Math.sqrt(12e6 / Math.max(asp, .05))));
-function rotImg(src, rot) {
-  src.rc = src.rc || {}; if (src.rc[rot]) return src.rc[rot];
-  const w = src.img.naturalWidth, h0 = src.img.naturalHeight, odd = rot % 180 !== 0, c = document.createElement('canvas');
+function rotImg(src, rot, pg) {
+  const im = src.imgs[pg - 1], key = pg + ':' + rot;
+  src.rc = src.rc || {}; if (src.rc[key]) return src.rc[key];
+  const w = im.naturalWidth, h0 = im.naturalHeight, odd = rot % 180 !== 0, c = document.createElement('canvas');
   c.width = odd ? h0 : w; c.height = odd ? w : h0;
-  const x = c.getContext('2d'); x.translate(c.width / 2, c.height / 2); x.rotate(rot * Math.PI / 180); x.drawImage(src.img, -w / 2, -h0 / 2);
-  return (src.rc[rot] = c);
+  const x = c.getContext('2d'); x.translate(c.width / 2, c.height / 2); x.rotate(rot * Math.PI / 180); x.drawImage(im, -w / 2, -h0 / 2);
+  return (src.rc[key] = c);
 }
 async function renderRegion(src, pg, rect, outW, rot) {
   rot = (((rot || 0) % 360) + 360) % 360;
   rect = rect || { x: 0, y: 0, w: 1, h: 1 };
-  if (src.kind === 'img') {
-    const base = rot ? rotImg(src, rot) : src.img, iw = base.naturalWidth || base.width, ih = base.naturalHeight || base.height, sw = rect.w * iw, sh = rect.h * ih;
+  if (src.kind === 'imgs') {
+    pg = clamp(pg || 1, 1, src.n);
+    const base = rot ? rotImg(src, rot, pg) : src.imgs[pg - 1], iw = base.naturalWidth || base.width, ih = base.naturalHeight || base.height, sw = rect.w * iw, sh = rect.h * ih;
     const w = Math.min(sw, fitW(outW, sh / sw)), sc = w / sw;
     const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(sw * sc)); c.height = Math.max(1, Math.round(sh * sc));
     c.getContext('2d').drawImage(base, rect.x * iw, rect.y * ih, sw, sh, 0, 0, c.width, c.height); return c;
@@ -490,7 +568,7 @@ const chartKey = pt => { const c = pt.chart.view || pt.chart.crop; return [pt.id
 /* ---------- 도안 데이터 규칙 ---------- */
 function newPart(p) {
   return { id: uid(), name: '', kind: 'chart', needle: 'knit', mode: 'flat', firstRow: 'RS', rsDir: 'rtl', wsDir: 'ltr',
-    chart: { page: 1, crop: { x: .08, y: .08, w: .84, h: .84 }, cropSet: false, rowStart: 1, rowEnd: 20, rows: 20, cols: 20, colsAuto: true, colsExact: 20, aspect: .707, fromTop: false },
+    chart: { page: 1, crop: { x: .2, y: .2, w: .6, h: .6 }, cropSet: false, rowStart: 1, rowEnd: 20, rows: 20, cols: 20, colsAuto: true, colsExact: 20, aspect: .707, fromTop: false },
     text: { raw: '', lines: [] }, cur: 1, log: [], markers: {} };
 }
 function parseText(raw, crochet) {
@@ -509,7 +587,15 @@ const colsEff = ch => ch.cols;
 const rStart = ch => ch.rowStart || 1;
 const getMk = pt => { if (!Array.isArray(pt.mk)) pt.mk = Object.entries(pt.markers || {}).filter(([g, c]) => MARK[c]).map(([g, c]) => ({ x: +g / (pt.chart.cols || 1), c })); return pt.mk; };
 const textRows = pt => { const s = new Set(); pt.text.lines.forEach(L => { for (let r = L.a; r <= L.b; r++) s.add(r); }); return [...s].sort((a, b) => a - b); };
-const total = pt => pt.kind === 'chart' ? pt.chart.rows : textRows(pt).length;
+/* 범위 여러 개: 첫 범위는 chart 자체, 추가 범위는 chart.extra */
+function ranges(ch) {
+  const base = { page: ch.page || 1, crop: ch.crop, rowStart: rStart(ch), rows: ch.rows || 1, fromTop: !!ch.fromTop };
+  return [base, ...(ch.extra || []).map(e => ({ page: e.page || ch.page || 1, crop: e.crop, rowStart: e.rowStart || 1, rows: e.rows || 1, fromTop: e.fromTop != null ? !!e.fromTop : !!ch.fromTop }))];
+}
+const multiOf = ch => (ch && ch.extra && ch.extra.length && !ch.free) ? (ch.multi === 'seq' ? 'seq' : 'together') : null;
+function span(ch) { const m = multiOf(ch); if (!m) return ch.rows; const R = ranges(ch); return m === 'seq' ? R.reduce((a, r) => a + r.rows, 0) : Math.max(...R.map(r => r.rows)); }
+function seqIndex(ch, cur) { const R = ranges(ch); let s = rStart(ch); for (let i = 0; i < R.length; i++) { if (cur < s + R[i].rows) return { i, local: Math.max(0, cur - s) }; s += R[i].rows; } const l = R.length - 1; return { i: l, local: R[l].rows }; }
+const total = pt => pt.kind === 'chart' ? span(pt.chart) : textRows(pt).length;
 const doneMap = pt => { const m = new Map(); pt.log.forEach(e => { if (!m.has(e.r) || m.get(e.r) < e.t) m.set(e.r, e.t); }); return m; };
 function currentRow(pt) {
   if (pt.kind === 'chart') return pt.cur;
@@ -569,7 +655,7 @@ function seg(opts, get, set) {
   const wrap = h('div', { class: 'seg', role: 'group' });
   const btns = opts.map(([v, l]) => h('button', { type: 'button', class: 'segb', onclick: () => { set(v); paint(); } }, l));
   const paint = () => btns.forEach((b, i) => { b.classList.toggle('on', opts[i][0] === get()); b.setAttribute('aria-pressed', opts[i][0] === get()); });
-  wrap.append(...btns); paint(); return wrap;
+  wrap.append(...btns); paint(); wrap.paint = paint; return wrap;
 }
 
 /* ---------- 화면: 홈 ---------- */
@@ -606,14 +692,17 @@ function buildHome() {
 }
 async function openNewProject() {
   const name = h('input', { class: 'inp', placeholder: '예: 모비 스웨터' });
-  let file = null;
-  const fl = h('div', { class: 'hint' }, '도안 파일(PDF 또는 이미지)은 나중에 골라도 돼요.');
-  const pickBtn = h('button', { class: 'btn', type: 'button', onclick: async () => { const f = await pickFile('application/pdf,image/*'); if (f) { file = f; fl.textContent = '선택한 파일: ' + f.name; if (!name.value) name.value = f.name.replace(/\.[^.]+$/, ''); } } }, '도안 파일 선택');
-  const ok = await modal('새 프로젝트', [h('div', { class: 'field' }, name), pickBtn, fl], [{ label: '취소', val: false }, { label: '만들기', cls: 'pri', val: true }]);
+  let files = null;
+  const fl = h('div', { class: 'hint' }, '도안은 나중에 넣어도 돼요.');
+  const pick = async (accept, multi) => { const f = await pickFile(accept, multi); if (!f) return; files = Array.isArray(f) ? f : [f]; fl.textContent = files.length > 1 ? `사진 ${files.length}장을 골랐어요 · 고른 순서대로 페이지가 돼요` : '선택한 파일: ' + files[0].name; if (!name.value) name.value = files[0].name.replace(/\.[^.]+$/, ''); };
+  const pdfBtn = h('button', { class: 'btn', type: 'button', style: 'flex:1', onclick: () => pick('application/pdf,.pdf', false) }, 'PDF로 시작하기');
+  const photoBtn = h('button', { class: 'btn', type: 'button', style: 'flex:1', onclick: () => pick('image/*', true) }, '사진으로 시작하기');
+  const ok = await modal('새 프로젝트', [h('div', { class: 'field' }, name), h('div', { class: 'row2', style: 'gap:8px' }, pdfBtn, photoBtn), fl,
+    h('p', { class: 'hint' }, '사진은 촬영하거나 사진 보관함에서 여러 장을 고를 수 있어요. 도안을 정면에서 평평하게 찍으면 범위가 잘 맞아요.')], [{ label: '취소', val: false }, { label: '만들기', cls: 'pri', val: true }]);
   if (!ok) return;
   const p = { id: uid(), name: name.value.trim() || '새 프로젝트', u: Date.now(), parts: [], file: null };
   projects[p.id] = p;
-  if (file) await attachFile(p, file);
+  if (files) await attachFile(p, files);
   touch(p); ui.active = p.id; saveUI(); route();
   openSetup(p.id, null);
 }
@@ -649,14 +738,16 @@ async function openMenu(pid) {
   const item = (label, fn, cls) => h('button', { class: 'menuitem ' + (cls || ''), onclick: async () => { s.close(); await fn(); } }, label);
   s.body.style.padding = '0';
   s.body.append(
-    h('div', { class: 'sum', style: 'margin:12px;' }, h('div', {}, '도안 파일: ', p.file ? p.file.name : '없음'), h('div', { class: 'hint' }, '파일은 이 기기에만 저장돼요.')),
-    item('도안 파일 바꾸기', async () => { const f = await pickFile('application/pdf,image/*'); if (f && await attachFile(p, f)) { toast('도안 파일을 바꿨어요'); route(); } }),
+    h('div', { class: 'sum', style: 'margin:12px;' }, h('div', {}, '도안 파일: ', p.file ? p.file.name : '없음'), h('div', { class: 'hint' }, p.file && p.file.cloud ? '내 계정에 저장돼 있어서 다른 기기에서도 열려요.' : p.file ? '아직 이 기기에만 있어요. 인터넷에 연결되면 내 계정에 올라가요.' : '')),
+    item('도안 파일 바꾸기 (PDF)', async () => { const f = await pickFile('application/pdf,.pdf'); if (f && await attachFile(p, [f])) { toast('도안 파일을 바꿨어요'); route(); } }),
+    item('도안 파일 바꾸기 (사진)', async () => { const f = await pickFile('image/*', true); if (f && await attachFile(p, f)) { toast('도안을 사진으로 바꿨어요'); route(); } }),
+    ...(p.file && p.file.kind === 'pages' ? [item('사진 페이지 추가', async () => { const f = await pickFile('image/*', true); if (f && await attachFile(p, f, { append: true })) { toast('사진 페이지를 추가했어요'); route(); } })] : []),
     item('시작 준비 (유의사항·코 잡기)', () => openPrep(pid, (p.parts.find(x => x.kind === 'prep') || {}).id || null)),
     item('부위 순서 바꾸기', async () => { if (p.parts.length < 2) { toast('부위가 2개 이상일 때 순서를 바꿀 수 있어요'); return; } openReorder(pid); }),
     item('프로젝트 이름 바꾸기', async () => { const n = await askText('프로젝트 이름', p.name); if (n) { p.name = n; touch(p); route(); } }),
     item('백업 내보내기', () => exportBackup()),
     item('백업 불러오기', () => importBackup()),
-    item('프로젝트 삭제', async () => { if (await askConfirm(`“${p.name}” 프로젝트와 모든 기록을 지울까요?`, '지우기', true)) { delete projects[pid]; removeRemote(pid); idb.del(pid); if (p.file && p.file.assetId) cloudDelete(p.file.assetId); delete sources[pid]; ui.active = null; saveUI(); saveLocal(); route(); } }, 'danger'));
+    item('프로젝트 삭제', async () => { if (await askConfirm(`“${p.name}” 프로젝트와 모든 기록을 지울까요?`, '지우기', true)) { delete projects[pid]; removeRemote(pid); idb.del(pid); if (p.file && p.file.cloud) cloudDelete(p.file.cloud.paths); delete sources[pid]; ui.active = null; saveUI(); saveLocal(); route(); } }, 'danger'));
 }
 async function openReorder(pid) {
   const s = openSheet('부위 순서 바꾸기');
@@ -694,7 +785,7 @@ async function importBackup() {
   const f = await pickFile('application/json,.json'); if (!f) return;
   try {
     const data = JSON.parse(await f.text()); let n = 0;
-    (data.projects || []).forEach(q => { if (q && q.id && Array.isArray(q.parts) && (!projects[q.id] || (q.u || 0) > (projects[q.id].u || 0))) { if (q.file) delete q.file.assetId; projects[q.id] = q; touch(q); n++; } });
+    (data.projects || []).forEach(q => { if (q && q.id && Array.isArray(q.parts) && (!projects[q.id] || (q.u || 0) > (projects[q.id].u || 0))) { if (q.file) delete q.file.assetId; if (q.file && q.file.cloud && me && !(q.file.cloud.paths || []).every(x => x.startsWith(me.id + '/'))) delete q.file.cloud; projects[q.id] = q; touch(q); n++; } });
     toast(`${n}개 프로젝트를 불러왔어요`); route();
   } catch (e) { toast('백업 파일을 읽지 못했어요'); }
 }
@@ -749,7 +840,7 @@ function buildTracker(p, part, host) {
   const free = isChart && !!part.chart.free;
   let svg, elayer, ar = .7, draft = null;
   const ed = { on: false, tool: 'rect', row: 1, end: 1, thick: .03, draw: true, fill: false };
-  const rEnd = pt => rStart(pt.chart) + pt.chart.rows - 1;
+  const rEnd = pt => rStart(pt.chart) + span(pt.chart) - 1;
   let rowLab, endIn, nIn, thLab, drawBtn, fillBtn; const toolBtns = {};
   const ctx = T = { pid: p.id, partId: part.id, markEdit: false, markColor: 1, relEl: null, lastT: null };
   const P = () => projects[ctx.pid], PT = () => P() && P().parts.find(x => x.id === ctx.partId);
@@ -763,6 +854,7 @@ function buildTracker(p, part, host) {
 
   const tools = [];
   let inner, hl, tint, mlayer, cbox, cardsBox, chartWrap, mbar, markBtn;
+  let shownIdx = -1, boxes = null, mregion = null;
   const tmain = h('div', { class: 'tmain' });
   const histBtn = h('button', { class: 'tb', onclick: () => openHistory(ctx.pid, ctx.partId) }, '기록 보기');
   const setBtn = h('button', { class: 'tb', onclick: () => openSetup(ctx.pid, ctx.partId) }, '설정');
@@ -775,6 +867,7 @@ function buildTracker(p, part, host) {
     const setZoom = d => { const i = clamp(zs.indexOf(ui.zoom[part.id] || 1) + d, 0, zs.length - 1); ui.zoom[part.id] = zs[i]; saveUI(); applyZoom(); scrollToRow(false); };
     const toggleMark = on => { ctx.markEdit = on; markBtn.classList.toggle('on', on); mbar.hidden = !on; mlayer && mlayer.classList.toggle('edit', on); };
     markBtn = h('button', { class: 'tb', onclick: () => (free ? toggleHl(!ed.on) : toggleMark(!ctx.markEdit)) }, free ? '하이라이트 편집' : '마커링 편집');
+    if (multiOf(part.chart)) markBtn.hidden = true;
     mbar = h('div', { class: 'mbar', hidden: true },
       h('span', { class: 'small muted' }, '색'),
       MARK.slice(1).map((c, i) => h('button', { class: 'msw' + (i === 0 ? ' on' : ''), 'aria-label': MARK_NAME[i + 1], style: 'background:' + c, onclick: () => { ctx.markColor = i + 1; mbar.querySelectorAll('.msw').forEach((b, k) => b.classList.toggle('on', k === i)); } })),
@@ -787,7 +880,7 @@ function buildTracker(p, part, host) {
       h('button', { class: 'tb', 'aria-label': '확대', onclick: () => setZoom(1) }, '＋'),
       h('button', { class: 'tb', onclick: async () => {
         const pt = PT(); if (!pt) return;
-        const rs = rStart(pt.chart), re = rs + pt.chart.rows - 1;
+        const rs = rStart(pt.chart), re = rs + span(pt.chart) - 1;
         const n = await askNumber(`몇 단으로 이동할까요? (${rs}~${re})`, Math.min(pt.cur, re), rs, re);
         if (n) { pt.cur = n; touch(P()); refresh(true); }
       } }, '단 이동'),
@@ -810,30 +903,57 @@ function buildTracker(p, part, host) {
     inner.hidden = true;
     tmain.append(chartWrap);
     applyZoom();
-    (async () => {
-      let canvas = chartCache.get(chartKey(part));
-      if (!canvas) {
-        const src = await ensureSource(p);
-        if (T !== ctx) return;
-        if (!src) {
-          chartWrap.replaceChildren(h('div', { class: 'empty' }, p.file ? (p.file.assetId ? `저장된 “${p.file.name}” 파일을 불러오지 못했어요.` : `이 기기에 “${p.file.name}” 파일이 없어요.`) : '도안 파일이 아직 없어요.', h('div', { class: 'row2', style: 'justify-content:center' },
-            h('button', { class: 'btn pri', onclick: async () => { const f = await pickFile('application/pdf,image/*'); if (f && await attachFile(p, f)) route(); } }, '도안 파일 선택'))));
-          return;
-        }
-        try { canvas = await renderRegion(src, part.chart.page, part.chart.view || part.chart.crop, 2600, part.chart.rot); } catch (e) { chartWrap.replaceChildren(h('div', { class: 'empty' }, '도안을 그리지 못했어요. 설정에서 페이지와 영역을 확인해 주세요.')); return; }
-        if (chartCache.size > 4) chartCache.delete(chartCache.keys().next().value);
-        chartCache.set(chartKey(part), canvas);
-      }
-      if (T !== ctx) return;
-      inner.prepend(canvas); chartWrap.querySelector('.loading')?.remove(); inner.hidden = false;
-      ar = canvas.width / canvas.height; placeBox(); renderMarkers(); layoutChart(); scrollToRow(false);
-    })();
+    loadChart();
   } else {
     cardsBox = h('div', { class: 'cards' }); tmain.append(cardsBox);
   }
   tools.push(histBtn, setBtn, resetBtn);
   curUI.tools.replaceChildren(...tools);
 
+  async function loadChart() {
+    const pt = PT(); if (!pt) return;
+    const m = multiOf(pt.chart), R = ranges(pt.chart);
+    let pg = pt.chart.page, region, idx = 0;
+    if (m === 'seq') { idx = seqIndex(pt.chart, pt.cur).i; pg = R[idx].page; region = idx === 0 ? (pt.chart.view || R[0].crop) : R[idx].crop; }
+    else if (m === 'together') { let x0 = 1, y0 = 1, x1 = 0, y1 = 0; [...R.map(r => r.crop), pt.chart.view].filter(Boolean).forEach(c => { x0 = Math.min(x0, c.x); y0 = Math.min(y0, c.y); x1 = Math.max(x1, c.x + c.w); y1 = Math.max(y1, c.y + c.h); }); region = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; }
+    else region = pt.chart.view || pt.chart.crop;
+    shownIdx = idx; mregion = region;
+    const key = [pt.id, pg, pt.chart.rot || 0, region.x.toFixed(4), region.y.toFixed(4), region.w.toFixed(4), region.h.toFixed(4)].join('|');
+    let canvas = chartCache.get(key);
+    if (!canvas) {
+      const src = await ensureSource(p);
+      if (T !== ctx) return;
+      if (!src) {
+        chartWrap.replaceChildren(h('div', { class: 'empty' }, p.file ? (p.file.cloud ? `저장된 “${p.file.name}” 파일을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.` : `이 기기에 “${p.file.name}” 파일이 없어요.`) : '도안 파일이 아직 없어요.', h('div', { class: 'row2', style: 'justify-content:center' },
+          h('button', { class: 'btn pri', onclick: async () => { const f = await pickFile('application/pdf,image/*'); if (f && await attachFile(p, [f])) route(); } }, '도안 파일 선택'))));
+        return;
+      }
+      try { canvas = await renderRegion(src, pg, region, 2600, pt.chart.rot); } catch (e) { chartWrap.replaceChildren(h('div', { class: 'empty' }, '도안을 그리지 못했어요. 설정에서 페이지와 영역을 확인해 주세요.')); return; }
+      if (chartCache.size > 4) chartCache.delete(chartCache.keys().next().value);
+      chartCache.set(key, canvas);
+    }
+    if (T !== ctx) return;
+    inner.querySelector('canvas')?.remove();
+    if (m) {
+      inner.querySelectorAll('.cbox').forEach(n => n.remove());
+      const list = m === 'seq' ? [idx] : R.map((_, i) => i);
+      boxes = list.map(i => {
+        const r = R[i], c = r.crop, t = h('div', { class: 'tint' }), l = h('div', { class: 'hl' }), done = h('div', { class: 'rdone', hidden: true }, h('span', {}, '완료')), tag = h('i', { class: 'rtag' }, String(i + 1));
+        const box = h('div', { class: 'cbox', style: `left:${(c.x - region.x) / region.w * 100}%;top:${(c.y - region.y) / region.h * 100}%;width:${c.w / region.w * 100}%;height:${c.h / region.h * 100}%` }, h('div', { class: 'ov' }, t, l), done, R.length > 1 ? tag : null);
+        inner.append(box); return { i, r, tint: t, hl: l, done };
+      });
+    } else boxes = null;
+    inner.prepend(canvas); chartWrap.querySelector('.loading')?.remove(); inner.hidden = false;
+    ar = canvas.width / canvas.height; if (!m) { placeBox(); renderMarkers(); } layoutChart(); scrollToRow(false);
+  }
+  function paintBox(b, r) {
+    const N = b.r.rows, fromTop = b.r.fromTop;
+    b.hl.hidden = r > N || r < 1; b.done.hidden = r <= N;
+    const idx = fromTop ? r - 1 : N - r;
+    b.hl.style.top = (idx / N * 100) + '%'; b.hl.style.height = (100 / N) + '%';
+    const dn = clamp(r - 1, 0, N);
+    b.tint.style.height = (dn / N * 100) + '%'; b.tint.style.top = fromTop ? '0' : 'auto'; b.tint.style.bottom = fromTop ? 'auto' : '0';
+  }
   function renderShapes() {
     const pt = PT(); if (!pt || !svg || inner.hidden) return;
     const W = 1000, H = 1000 / ar; svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -942,7 +1062,14 @@ function buildTracker(p, part, host) {
   }
   function layoutChart() {
     if (free) { renderShapes(); return; }
-    const pt = PT(); if (!pt || !hl) return;
+    const pt = PT(); if (!pt) return;
+    const m = multiOf(pt.chart);
+    if (m && boxes) {
+      if (m === 'seq') { const q = seqIndex(pt.chart, pt.cur); if (q.i !== shownIdx) { loadChart(); return; } paintBox(boxes[0], q.local + 1); hl = boxes[0].hl; }
+      else { const k = pt.cur - rStart(pt.chart) + 1; boxes.forEach(b => paintBox(b, k)); const live = boxes.find(b => !b.hl.hidden); hl = live ? live.hl : boxes[0].hl; }
+      return;
+    }
+    if (!hl) return;
     const N = pt.chart.rows, r = pt.cur - rStart(pt.chart) + 1, fromTop = pt.chart.fromTop;
     hl.hidden = r > N || r < 1;
     const idx = fromTop ? r - 1 : N - r;
@@ -992,6 +1119,7 @@ function buildTracker(p, part, host) {
       const cl = (pt.kind === 'chart' ? (pt.counts || []) : pt.text.lines).find(L => r >= L.a && r <= L.b);
       c1.append(...[h('b', {}, `${r}단`), ' ', h('span', { class: 'hlmark' }, sideLabel(pt, sd.rs)), ' ',
         h('span', { class: 'dirchip' }, (sd.dir === 'rtl' ? '← 오른쪽' : '→ 왼쪽') + (pt.mode === 'round' ? ' · 원통' : '')),
+        pt.kind === 'chart' && multiOf(pt.chart) ? ' ' : null, pt.kind === 'chart' && multiOf(pt.chart) ? h('span', { class: 'dirchip' }, multiOf(pt.chart) === 'seq' ? `범위 ${seqIndex(pt.chart, r).i + 1}/${ranges(pt.chart).length}` : `${ranges(pt.chart).length}개 동시`) : null,
         cl && cl.s ? ' ' : null, cl && cl.s ? h('span', { class: 'dirchip' }, `${cl.s}코`) : null].filter(x => x !== null));
     }
     const le = lastLog(pt);
@@ -1013,7 +1141,7 @@ function buildTracker(p, part, host) {
   }
   function next() {
     const pt = PT(); if (!pt) return;
-    const r = currentRow(pt); if (!Number.isFinite(r) || (pt.kind === 'chart' && r > rStart(pt.chart) + pt.chart.rows - 1)) return;
+    const r = currentRow(pt); if (!Number.isFinite(r) || (pt.kind === 'chart' && r > rStart(pt.chart) + span(pt.chart) - 1)) return;
     const e = { r, t: Date.now() };
     pt.log.push(e); const before = pt.cur; if (pt.kind === 'chart') pt.cur = r + 1;
     touch(P()); refresh(true);
@@ -1095,22 +1223,25 @@ function openSetup(pid, partId) {
   if (exist) d.chart.cropSet = true;
   d.wsDir = d.wsDir || (d.rsDir === 'rtl' ? 'ltr' : 'rtl');
   d.chart.rowStart = d.chart.rowStart || 1; d.chart.rowEnd = d.chart.rowEnd || (d.chart.rowStart + d.chart.rows - 1);
+  d.chart.extra = (d.chart.extra || []).map(x => clone(x)); if (exist) d.chart.extra.forEach(x => { x.cropSet = true; });
+  let sel = 0;
+  const E = () => sel === 0 ? d.chart : d.chart.extra[sel - 1];
   const lay = h('div', { class: 'layer' });
   const close = () => lay.remove();
   const err = h('div', { class: 'err', hidden: true, role: 'alert' });
-  const showErr = m => { err.textContent = m; err.hidden = !m; if (m) err.scrollIntoView({ block: 'center' }); };
+  const showErr = m => { err.textContent = m; err.hidden = !m; if (m) err.scrollIntoView({ block: 'nearest' }); };
 
   const nameIn = h('input', { class: 'inp', value: d.name, placeholder: '예: 등, 몸통, 소매', oninput: e => { d.name = e.target.value; } });
-  const needleSeg = radio([['knit', '대바늘'], ['crochet', '코바늘']], () => d.needle || 'knit', v => { d.needle = v; relabel(); });
-  const kindSeg = radio([['chart', '차트도안'], ['text', '서술도안']], () => d.kind, v => { d.kind = v; vis(); if (v === 'chart') loadPage(); });
-  const modeSeg = radio([['flat', '단면 (왔다갔다)'], ['round', '원통 (둥글게)']], () => d.mode, v => { d.mode = v; vis(); });
-  const firstSeg = radio([['RS', '겉면'], ['WS', '안면']], () => d.firstRow, v => { d.firstRow = v; });
-  const dirSeg = radio([['rtl', '오른쪽 → 왼쪽'], ['ltr', '왼쪽 → 오른쪽']], () => d.rsDir, v => { d.rsDir = v; d.wsDir = v === 'rtl' ? 'ltr' : 'rtl'; const ws = wsSeg.querySelectorAll('input'); ws[0].checked = d.wsDir === 'rtl'; ws[1].checked = d.wsDir === 'ltr'; });
-  const firstField = h('div', { class: 'q' }, h('label', { class: 'lab' }, '시작 단은 어느 면?'), firstSeg);
-  const wsSeg = radio([['rtl', '오른쪽 → 왼쪽'], ['ltr', '왼쪽 → 오른쪽']], () => d.wsDir, v => { d.wsDir = v; });
-  const dirLab = h('label', { class: 'lab' }, '겉뜨기 단 읽는 방향'), wsLab = h('label', { class: 'lab' }, '안뜨기 단 읽는 방향');
-  function relabel() { const c = d.needle === 'crochet'; dirLab.textContent = c ? '겉면 단 읽는 방향' : '겉뜨기 단 읽는 방향'; wsLab.textContent = c ? '안면 단 읽는 방향' : '안뜨기 단 읽는 방향'; updPreview(); }
-  const wsField = h('div', { class: 'q' }, wsLab, wsSeg);
+  const needleSeg = seg([['knit', '대바늘'], ['crochet', '코바늘']], () => d.needle || 'knit', v => { d.needle = v; relabel(); });
+  const kindSeg = seg([['chart', '차트도안'], ['text', '서술도안']], () => d.kind, v => { d.kind = v; vis(); updPreview(); if (v === 'chart') loadPage(); });
+  const modeSeg = seg([['flat', '단면'], ['round', '원통']], () => d.mode, v => { d.mode = v; vis(); updPreview(); });
+  const firstSeg = seg([['RS', '겉면'], ['WS', '안면']], () => d.firstRow, v => { d.firstRow = v; updPreview(); });
+  const dirSeg = seg([['rtl', '←'], ['ltr', '→']], () => d.rsDir, v => { d.rsDir = v; d.wsDir = v === 'rtl' ? 'ltr' : 'rtl'; updPreview(); });
+  const firstField = h('div', { class: 'q' }, h('label', { class: 'lab' }, '시작 단 면'), firstSeg);
+  d.wsDir = d.rsDir === 'rtl' ? 'ltr' : 'rtl';
+  const dirLab = h('label', { class: 'lab' }, '겉뜨기 단 방향');
+  function relabel() { dirLab.textContent = d.needle === 'crochet' ? '겉면 단 방향' : '겉뜨기 단 방향'; updPreview(); }
+
   const preview = h('div', { class: 'preview', 'aria-live': 'polite' });
   function updPreview() {
     const b = d.kind === 'chart' ? (d.chart.rowStart || 1) : ((parseText(d.text.raw || '')[0] || { a: 1 }).a);
@@ -1124,26 +1255,30 @@ function openSetup(pid, partId) {
   const rectEl = h('div', { class: 'croprect' });
   const gridSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); gridSvg.setAttribute('viewBox', '0 0 100 100'); gridSvg.setAttribute('preserveAspectRatio', 'none');
   const rowOne = h('span', { class: 'rowone' }, '1단');
-  const hds = ['t', 'b', 'l', 'r'].map(k => h('i', { class: 'hd', 'data-k': k }));
+  const hds = ['t', 'b', 'l', 'r', 'm'].map(k => h('i', { class: 'hd', 'data-k': k }, k === 'm' ? '✥' : ''));
   rectEl.append(gridSvg, rowOne, ...hds);
   const cellEl = h('div', { class: 'cellrect', hidden: true });
   const viewEl = h('div', { class: 'viewrect', hidden: true });
-  holderBox.append(ov, viewEl, rectEl, cellEl);
+  const othersEl = h('div', { style: 'position:absolute;inset:0;pointer-events:none' });
+  holderBox.append(ov, othersEl, viewEl, rectEl, cellEl);
   let editing = 'crop';
-  const R = () => (editing === 'view' && d.chart.view) ? d.chart.view : d.chart.crop;
+  const R = () => (editing === 'view' && sel === 0 && d.chart.view) ? d.chart.view : E().crop;
   const edBtns = {
-    crop: h('button', { class: 'btn sm on', type: 'button', onclick: () => setEditing('crop') }, '단수 체크 영역 (분홍)'),
-    view: h('button', { class: 'btn sm', type: 'button', onclick: () => setEditing('view') }, '화면에 보여줄 범위 (파랑)')
+    crop: h('button', { class: 'btn sm on', type: 'button', onclick: () => setEditing('crop') }, '분홍 (단수 체크)'),
+    view: h('button', { class: 'btn sm', type: 'button', onclick: () => setEditing('view') }, '파랑 (보여줄 부분)')
   };
   const viewOff = h('button', { class: 'btn sm', type: 'button', hidden: true, onclick: () => { d.chart.view = null; setEditing('crop'); } }, '표시 범위 없애기');
   function setEditing(m) {
     editing = m;
-    if (m === 'view' && !d.chart.view) { const c = d.chart.crop, x = Math.max(0, c.x - .02), y = Math.max(0, c.y - .02); d.chart.view = { x, y, w: Math.min(1 - x, c.w + .04), h: Math.min(1 - y, c.h + .15) }; }
+    if (m === 'view' && !d.chart.view) { const c = E().crop, x = Math.max(0, c.x - .02), y = Math.max(0, c.y - .02); d.chart.view = { x, y, w: Math.min(1 - x, c.w + .04), h: Math.min(1 - y, c.h + .15) }; }
     Object.entries(edBtns).forEach(([k, b]) => b.classList.toggle('on', k === m));
     (m === 'view' ? viewEl : rectEl).append(...hds);
     drawRect();
   }
-  const viewTools = h('div', { class: 'pager' }, h('span', { class: 'small muted' }, '편집할 영역'), edBtns.crop, edBtns.view, viewOff);
+  const edRow = h('div', { class: 'pager', style: 'margin-top:8px' }, h('span', { class: 'small muted' }, '편집할 범위'), edBtns.crop, edBtns.view);
+  edRow.hidden = !d.chart.view;
+  const viewSeg = seg([[false, '차트만 보기'], [true, '차트 밖도 같이 보기']], () => !!d.chart.view, v => { if (v) setEditing('view'); else { d.chart.view = null; setEditing('crop'); } edRow.hidden = !v; });
+  const viewTools = h('div', { style: 'margin-bottom:10px' }, viewSeg, edRow);
   let measuring = false;
   const measBtn = h('button', { class: 'btn sm', type: 'button', style: 'margin:8px 0 2px', onclick: () => { measuring = !measuring; updMeas(); } }, '칸 하나 재기');
   function updMeas() { measBtn.classList.toggle('pri', measuring); measBtn.textContent = measuring ? '재는 중 · 칸 하나를 드래그하세요' : (d.chart.cell ? '칸 다시 재기' : '칸 하나 재기'); ov.style.cursor = measuring ? 'crosshair' : ''; }
@@ -1151,9 +1286,10 @@ function openSetup(pid, partId) {
   const pageLab = h('span', { class: 'small muted' });
   const fileNote = h('div', { class: 'hint' });
   const rowsInfo = h('div', { class: 'hint' });
-  const syncRows = () => { const c = d.chart; c.rows = Math.max(0, (c.rowEnd || 0) - (c.rowStart || 0) + 1); rowsInfo.textContent = c.rows > 0 ? `${c.rowStart}~${c.rowEnd}단 · 총 ${c.rows}단` : '끝 단이 시작 단보다 작아요'; drawGrid(); };
-  const rsIn = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', min: 1, max: 999, value: d.chart.rowStart, oninput: e => { d.chart.rowStart = parseInt(e.target.value, 10) || 0; syncRows(); } });
-  const reIn = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', min: 1, max: 999, value: d.chart.rowEnd, oninput: e => { d.chart.rowEnd = parseInt(e.target.value, 10) || 0; syncRows(); } });
+  const syncRows = () => { const c = E(); c.rows = Math.max(0, (c.rowEnd || 0) - (c.rowStart || 0) + 1); chainSeq(); rowsInfo.textContent = c.rows > 0 ? `${c.rowStart}~${c.rowEnd}단 · 총 ${c.rows}단` : '끝 단이 시작 단보다 작아요'; if (typeof updMulti === 'function') updMulti(); drawGrid(); };
+  function chainSeq() { if (d.chart.multi !== 'seq') return; let e = d.chart.rowEnd; d.chart.extra.forEach(x => { const n = Math.max(1, (x.rowEnd || 0) - (x.rowStart || 0) + 1); x.rowStart = e + 1; x.rowEnd = x.rowStart + n - 1; x.rows = n; e = x.rowEnd; }); if (sel > 0 && typeof rsIn !== 'undefined') { rsIn.value = E().rowStart; reIn.value = E().rowEnd; } }
+  const rsIn = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', min: 1, max: 999, value: d.chart.rowStart, oninput: e => { E().rowStart = parseInt(e.target.value, 10) || 0; syncRows(); } });
+  const reIn = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', min: 1, max: 999, value: d.chart.rowEnd, oninput: e => { E().rowEnd = parseInt(e.target.value, 10) || 0; syncRows(); } });
   const colsIn = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', min: 1, max: 300, value: d.chart.cols, oninput: e => { d.chart.cols = parseInt(e.target.value, 10) || 0; d.chart.colsExact = d.chart.cols; drawGrid(); } });
   const colsInfo = h('div', { class: 'hint' });
   const autoSeg = seg([[true, '자동 계산'], [false, '직접 입력']], () => !!d.chart.colsAuto, v => { d.chart.colsAuto = v; if (!v) { d.chart.cols = Math.max(1, Math.round(d.chart.colsExact || d.chart.cols)); colsIn.value = d.chart.cols; } drawGrid(); });
@@ -1171,11 +1307,11 @@ function openSetup(pid, partId) {
     measBtn.hidden = !c.colsAuto;
     colsIn.hidden = !!c.colsAuto;
   }
-  const fromSeg = seg([[false, '시작 단이 맨 아래'], [true, '시작 단이 맨 위']], () => d.chart.fromTop, v => { d.chart.fromTop = v; drawGrid(); });
+  const fromSeg = seg([[false, '시작 단이 맨 아래'], [true, '시작 단이 맨 위']], () => !!E().fromTop, v => { E().fromTop = v; drawGrid(); });
   const pageBar = h('div', { class: 'pager' },
-    h('button', { class: 'btn sm', type: 'button', onclick: () => turn(-1) }, '‹ 이전 페이지'), pageLab,
-    h('button', { class: 'btn sm', type: 'button', onclick: () => turn(1) }, '다음 페이지 ›'));
-  const attachBtn = h('button', { class: 'btn', type: 'button', onclick: async () => { const f = await pickFile('application/pdf,image/*'); if (f && await attachFile(p, f)) { d.chart.page = 1; loadPage(); vis(); } } }, '도안 파일 선택');
+    h('button', { class: 'btn sm', type: 'button', onclick: () => turn(-1) }, '‹ 이전'), pageLab,
+    h('button', { class: 'btn sm', type: 'button', onclick: () => turn(1) }, '다음 ›'));
+  const attachBtn = h('button', { class: 'btn', type: 'button', onclick: async () => { const f = await pickFile('application/pdf,image/*'); if (f && await attachFile(p, [f])) { d.chart.page = 1; loadPage(); vis(); } } }, '도안 파일 선택');
   let czoom = 1;
   const zlab = h('span', { class: 'small muted', style: 'min-width:44px;text-align:center' }, '100%');
   const setCZ = async dv => {
@@ -1186,41 +1322,80 @@ function openSetup(pid, partId) {
     await loadPage();
     holder.scrollLeft = fx * holder.scrollWidth - holder.clientWidth / 2; holder.scrollTop = fy * holder.scrollHeight - holder.clientHeight / 2;
   };
-  pageBar.append(h('button', { class: 'btn sm', type: 'button', onclick: () => { d.chart.rot = ((d.chart.rot || 0) + 90) % 360; d.chart.crop = { x: .08, y: .08, w: .84, h: .84 }; d.chart.cropSet = false; d.chart.view = null; setEditing('crop'); loadPage(); } }, '↻ 회전'), h('span', { style: 'margin-left:auto;display:flex;gap:6px;align-items:center' },
+  pageBar.append(h('button', { class: 'btn sm', type: 'button', onclick: () => { d.chart.rot = ((d.chart.rot || 0) + 90) % 360; d.chart.crop = { x: .2, y: .2, w: .6, h: .6 }; d.chart.cropSet = false; d.chart.extra.forEach(x => { x.crop = { x: .2, y: .2, w: .6, h: .6 }; x.cropSet = false; }); d.chart.view = null; edRow.hidden = true; setEditing('crop'); loadPage(); } }, '↻ 회전'), h('span', { style: 'margin-left:auto;display:flex;gap:6px;align-items:center' },
     h('button', { class: 'btn sm', type: 'button', 'aria-label': '축소', onclick: () => setCZ(-1) }, '－'), zlab,
     h('button', { class: 'btn sm', type: 'button', 'aria-label': '확대', onclick: () => setCZ(1) }, '＋')));
-  const freeSeg = radio([[false, '격자 자동 (네모 차트)'], [true, '직접 그리기 (코바늘 등)']], () => !!d.chart.free, v => { d.chart.free = v; vis(); drawGrid(); });
+  const freeSeg = seg([[false, '격자 자동'], [true, '직접 그리기']], () => !!d.chart.free, v => { d.chart.free = v; vis(); drawGrid(); });
+  const freeField = h('div', { class: 'field' }, h('label', {}, '하이라이트 방식'), freeSeg, h('p', { class: 'hint' }, '격자 자동은 네모 칸 차트용이에요. 직접 그리기는 저장한 뒤 도안 화면의 ‘하이라이트 편집’에서 단마다 모양을 그려요(코바늘 차트 등).'));
+  const helpBox = h('p', { class: 'hint', hidden: true }, '가장자리 막대를 끌면 그 면의 크기가 바뀌고, 가운데 ✥ 손잡이를 끌면 범위 전체가 움직여요. 도안의 빈 곳을 끌면 도안이 움직이고, 두 손가락으로 확대·축소해요(컴퓨터는 －/＋ 버튼이나 Ctrl+휠). 단 번호·범례는 빼고 차트 칸만 감싸 주세요. ‘차트 밖도 같이 보기’를 켜면 파랑 범위로 유의사항 같은 주변 부분도 배경처럼 보여요. 체크는 분홍 범위에서만 돼요.');
+  const helpLine = h('p', { class: 'hint' }, '분홍 범위를 차트 칸 바깥 테두리에 맞춰 주세요.', h('button', { class: 'qbtn', type: 'button', 'aria-label': '범위 잡는 방법 자세히 보기', onclick: () => { helpBox.hidden = !helpBox.hidden; } }, '?'));
+  const rangeBar = h('div', { class: 'pager', style: 'margin-bottom:8px' });
+  const multiHint = h('p', { class: 'hint' });
+  const multiSeg = seg([['together', '동시에 뜨기'], ['seq', '순서대로 뜨기']], () => d.chart.multi === 'seq' ? 'seq' : 'together', v => { d.chart.multi = v; chainSeq(); selectRange(sel); });
+  const multiField = h('div', { style: 'margin-bottom:10px' }, multiSeg, multiHint);
+  function updMulti() {
+    const n = 1 + d.chart.extra.length, all = [d.chart, ...d.chart.extra];
+    multiField.hidden = n < 2;
+    if (d.chart.multi === 'seq') multiHint.textContent = '범위 1을 다 뜨면 범위 2로 이어서 넘어가요. 다음 범위의 시작 단은 자동으로 이어지고, 범위마다 페이지를 따로 고를 수 있어요.';
+    else { const rs = all.map(x => x.rows || 0), diff = rs.some(v => v !== rs[0]); multiHint.textContent = diff ? `범위마다 단 수가 달라요 (${rs.map((v, k) => `${k + 1}번 ${v}단`).join(', ')}). 짧은 범위는 다 뜨면 회색으로 멈춰요.` : '모든 범위의 같은 단을 한꺼번에 체크해요. 범위들은 같은 페이지에 있어야 해요.'; }
+  }
+  function renderRangeBar() {
+    const n = 1 + d.chart.extra.length;
+    rangeBar.replaceChildren(
+      ...Array.from({ length: n }, (_, k) => h('button', { class: 'btn sm' + (k === sel ? ' on' : ''), type: 'button', onclick: () => selectRange(k) }, `범위 ${k + 1}`)),
+      h('button', { class: 'btn sm', type: 'button', onclick: addRange }, '＋ 범위 추가'),
+      sel > 0 ? h('button', { class: 'btn sm danger', type: 'button', onclick: delRange }, '이 범위 삭제') : null);
+    rangeBar.hidden = !!d.chart.free; updMulti();
+  }
+  function selectRange(k) {
+    sel = clamp(k, 0, d.chart.extra.length);
+    setEditing('crop'); viewTools.hidden = sel > 0 || !!d.chart.free;
+    rsIn.value = E().rowStart; reIn.value = E().rowEnd; rsIn.disabled = d.chart.multi === 'seq' && sel > 0;
+    fromSeg.paint(); multiSeg.paint(); syncRows(); renderRangeBar(); loadPage();
+  }
+  function addRange() {
+    const last = d.chart.extra.length ? d.chart.extra[d.chart.extra.length - 1] : d.chart;
+    const seqM = d.chart.multi === 'seq', rs = seqM ? (last.rowEnd || 0) + 1 : d.chart.rowStart, re = seqM ? rs + (last.rows || 20) - 1 : d.chart.rowEnd;
+    d.chart.extra.push({ page: E().page || d.chart.page || 1, crop: { x: .2, y: .2, w: .6, h: .6 }, cropSet: false, rowStart: rs, rowEnd: re, rows: re - rs + 1, fromTop: !!d.chart.fromTop });
+    if (!d.chart.multi) d.chart.multi = 'together';
+    selectRange(d.chart.extra.length);
+  }
+  async function delRange() {
+    if (sel === 0) return;
+    if (!await askConfirm(`이 범위(범위 ${sel + 1})를 지울까요?`, '지우기', true)) return;
+    d.chart.extra.splice(sel - 1, 1); chainSeq(); selectRange(sel - 1);
+  }
   const chartSec = h('div', {},
-    h('div', { class: 'field' }, h('label', {}, '하이라이트 방식'), freeSeg, h('p', { class: 'hint' }, '“직접 그리기”는 저장한 뒤 도안 화면 위쪽의 ‘하이라이트 편집’에서 단마다 띠·사각형·원 모양을 그려요. 이때 아래 분홍 영역은 화면에 보여줄 도안 범위이고 격자는 쓰지 않아요.')),
-    h('div', { class: 'field' }, h('label', {}, '차트 영역 지정'), attachBtn, fileNote, pageBar, viewTools,
-      holder, h('p', { class: 'hint' }, '‘단수 체크 영역(분홍)’은 차트 칸의 바깥 테두리에 딱 맞게 감싸 주세요. ‘화면에 보여줄 범위(파랑)’를 따로 정하면 차트 아래의 유의사항 같은 부분도 배경처럼 같이 보여요(체크는 분홍 영역에서만 돼요). 단 번호·범례는 빼고, 위·아래·왼쪽·오른쪽 가장자리의 막대를 끌어 한 면씩 조정할 수 있어요. 두 손가락을 벌리면 확대, 모아 쥐면 축소, 두 손가락을 움직이면 위치가 이동해요.')),
+    h('div', { class: 'field' }, h('label', {}, '차트 범위'), fileNote, rangeBar, multiField, pageBar, viewTools,
+      holder, helpLine, helpBox),
     h('div', { class: 'two field' }, h('div', {}, h('label', { class: 'lab' }, '시작 단'), rsIn), h('div', {}, h('label', { class: 'lab' }, '끝 단'), reIn)),
     h('div', { class: 'field', style: 'margin-top:-8px' }, rowsInfo, h('p', { class: 'hint' }, '이 차트가 몇 단부터 몇 단까지인지 넣어 주세요. 예: 49~96단 차트면 시작 49, 끝 96. 총 단 수는 자동으로 계산돼요.')),
     
     h('div', { class: 'field' }, h('label', {}, '시작 단 위치'), fromSeg, h('p', { class: 'hint' }, '분홍 가로선이 도안의 단과 맞는지 확인해 주세요. 맞지 않으면 영역이나 시작·끝 단을 조정해요.')));
-  function turn(dv) { const src = sources[pid]; if (!src) return; d.chart.page = clamp(d.chart.page + dv, 1, src.n); loadPage(); }
+  function turn(dv) { const src = sources[pid]; if (!src) return; const np = clamp((E().page || 1) + dv, 1, src.n); if (d.chart.multi === 'seq') E().page = np; else { d.chart.page = np; d.chart.extra.forEach(x => { x.page = np; }); } loadPage(); }
   async function loadPage() {
     const src = await ensureSource(p);
-    if (!src) { holder.querySelector('canvas')?.remove(); pageLab.textContent = ''; fileNote.textContent = p.file ? `이 기기에 “${p.file.name}” 파일이 없어요. 같은 파일을 다시 선택해 주세요.` : '도안 파일을 먼저 선택해 주세요.'; rectEl.hidden = true; return; }
-    fileNote.textContent = p.file ? `도안 파일: ${p.file.name}` : '';
-    rectEl.hidden = false; pageLab.textContent = `${d.chart.page} / ${src.n} 페이지`;
-    const c = await renderRegion(src, d.chart.page, null, Math.min(3000, 1200 * czoom), d.chart.rot);
+    if (!src) { holder.querySelector('canvas')?.remove(); pageLab.textContent = ''; fileNote.textContent = p.file ? `이 기기에 “${p.file.name}” 파일이 없어요. 프로젝트 메뉴(⋯)의 ‘도안 파일 바꾸기’로 같은 파일을 골라 주세요.` : '프로젝트에 도안 파일이 없어요. 프로젝트 메뉴(⋯)의 ‘도안 파일 바꾸기’로 파일을 넣어 주세요.'; rectEl.hidden = true; return; }
+    fileNote.textContent = '';
+    rectEl.hidden = false; pageLab.textContent = `${E().page || 1} / ${src.n} 페이지`;
+    const c = await renderRegion(src, E().page || 1, null, Math.min(3000, 1200 * czoom), d.chart.rot);
     d.chart.aspect = c.width / c.height; holder.querySelector('canvas')?.remove(); holderBox.prepend(c); drawRect();
   }
   function drawRect() {
-    const c = d.chart.crop;
+    const c = E().crop;
+    othersEl.replaceChildren(...[d.chart, ...d.chart.extra].map((x, k) => (k === sel || (x.page || d.chart.page || 1) !== (E().page || 1)) ? null : h('div', { class: 'orect', style: `left:${x.crop.x * 100}%;top:${x.crop.y * 100}%;width:${x.crop.w * 100}%;height:${x.crop.h * 100}%` }, h('b', {}, '범위 ' + (k + 1)))).filter(Boolean));
     rectEl.style.cssText = `left:${c.x * 100}%;top:${c.y * 100}%;width:${c.w * 100}%;height:${c.h * 100}%`;
     const vw = d.chart.view; viewEl.hidden = !vw; viewOff.hidden = !vw; if (vw) viewEl.style.cssText = `left:${vw.x * 100}%;top:${vw.y * 100}%;width:${vw.w * 100}%;height:${vw.h * 100}%`;
-    const pos = { t: [50, 0], b: [50, 100], l: [0, 50], r: [100, 50] };
+    const pos = { t: [50, 0], b: [50, 100], l: [0, 50], r: [100, 50], m: [50, 50] };
     hds.forEach(n => { const q = pos[n.dataset.k]; n.style.left = q[0] + '%'; n.style.top = q[1] + '%'; });
     drawGrid();
   }
   function drawGrid() {
-    recalcCols(); const n = clamp(d.chart.rows || 0, 0, 400), cx = clamp(colsEff(d.chart) || 0, 0, 300); let s = '';
+    recalcCols(); const n = clamp(E().rows || 0, 0, 400), cx = clamp(colsEff(d.chart) || 0, 0, 300); let s = '';
     for (let i = 1; i < n; i++) s += `<line class="gl${i % 5 === 0 ? ' g5' : ''}" x1="0" x2="100" y1="${i / n * 100}" y2="${i / n * 100}"/>`;
     for (let j = 1; j < 0; j++) s += `<line class="gv${j % 5 === 0 ? ' g5' : ''}" x1="${j / cx * 100}" x2="${j / cx * 100}" y1="0" y2="100"/>`;
     gridSvg.innerHTML = d.chart.free ? '' : s;
-    rowOne.hidden = !!d.chart.free; rowOne.textContent = (d.chart.rowStart || 1) + '단'; rowOne.style.top = d.chart.fromTop ? '2px' : 'auto'; rowOne.style.bottom = d.chart.fromTop ? 'auto' : '2px';
+    rowOne.hidden = !!d.chart.free; rowOne.textContent = (d.chart.extra.length ? `범위 ${sel + 1} · ` : '') + (E().rowStart || 1) + '단'; rowOne.style.top = E().fromTop ? '2px' : 'auto'; rowOne.style.bottom = E().fromTop ? 'auto' : '2px';
   }
   let drag = null;
   const rel2 = e => { const rc = ov.getBoundingClientRect(); return [clamp((e.clientX - rc.left) / rc.width), clamp((e.clientY - rc.top) / rc.height), rc]; };
@@ -1230,9 +1405,10 @@ function openSetup(pid, partId) {
     if (lockUntilUp) return;
     const [px, py, rc] = rel2(e), c = R();
     
-    const mode = measuring ? 'cell' : edgeAt(px, py, rc, c);
-    drag = mode === 'cell' ? { mode, sx: px, sy: py } : mode ? { mode } : { mode: 'new', sx: px, sy: py };
-    drag.snapView = d.chart.view ? clone(d.chart.view) : null; drag.snapCrop = clone(d.chart.crop); drag.snapCell = d.chart.cell ? clone(d.chart.cell) : null; drag.snapSet = d.chart.cropSet;
+    const onMove = Math.hypot((px - (c.x + c.w / 2)) * rc.width, (py - (c.y + c.h / 2)) * rc.height) <= 24;
+    const mode = measuring ? 'cell' : onMove ? 'm' : edgeAt(px, py, rc, c);
+    drag = mode === 'cell' ? { mode, sx: px, sy: py } : mode === 'm' ? { mode, ox: px - c.x, oy: py - c.y } : mode ? { mode } : { mode: 'pan', cx: e.clientX, cy: e.clientY, sl: holder.scrollLeft, st: holder.scrollTop };
+    drag.snapView = d.chart.view ? clone(d.chart.view) : null; drag.snapCrop = clone(E().crop); drag.snapCell = d.chart.cell ? clone(d.chart.cell) : null; drag.snapSet = E().cropSet;
     ov.setPointerCapture(e.pointerId); e.preventDefault();
   });
   ov.addEventListener('pointermove', e => {
@@ -1240,12 +1416,13 @@ function openSetup(pid, partId) {
     if (gest) { moveGesture(); return; }
     if (lockUntilUp) return;
     const [px, py, rc] = rel2(e), c = R();
-    if (!drag) { const hit = measuring ? null : edgeAt(px, py, rc, c); ov.style.cursor = hit ? (hit === 't' || hit === 'b' ? 'ns-resize' : 'ew-resize') : 'crosshair'; return; }
+    if (!drag) { const onM = Math.hypot((px - (c.x + c.w / 2)) * rc.width, (py - (c.y + c.h / 2)) * rc.height) <= 24; const hit = measuring ? null : onM ? 'm' : edgeAt(px, py, rc, c); ov.style.cursor = hit === 'm' ? 'move' : hit ? (hit === 't' || hit === 'b' ? 'ns-resize' : 'ew-resize') : 'grab'; return; }
+    if (drag.mode === 'pan') { holder.scrollLeft = drag.sl - (e.clientX - drag.cx); holder.scrollTop = drag.st - (e.clientY - drag.cy); ov.style.cursor = 'grabbing'; return; }
     let n;
     if (drag.mode === 'cell') { d.chart.cell = { x: Math.min(drag.sx, px), y: Math.min(drag.sy, py), w: Math.abs(px - drag.sx), h: Math.abs(py - drag.sy) }; drawCell(); drawGrid(); return; }
-    if (drag.mode === 'new') n = { x: Math.min(drag.sx, px), y: Math.min(drag.sy, py), w: Math.abs(px - drag.sx), h: Math.abs(py - drag.sy) };
+    if (drag.mode === 'm') n = { x: clamp(px - drag.ox, 0, 1 - c.w), y: clamp(py - drag.oy, 0, 1 - c.h), w: c.w, h: c.h };
     else { let x1 = c.x, y1 = c.y, x2 = c.x + c.w, y2 = c.y + c.h; const m = drag.mode; if (m === 'l') x1 = px; else if (m === 'r') x2 = px; else if (m === 't') y1 = py; else if (m === 'b') y2 = py; n = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) }; }
-    if (editing === 'view') d.chart.view = n; else { d.chart.crop = n; d.chart.cropSet = true; } drawRect();
+    if (editing === 'view') d.chart.view = n; else { E().crop = n; E().cropSet = true; } drawRect();
   });
   const ptrs = new Map(); let gest = null, lockUntilUp = false, reT = null;
   function mid() { const a = [...ptrs.values()]; return { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, dist: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1 }; }
@@ -1254,7 +1431,7 @@ function openSetup(pid, partId) {
     const r = holderBox.getBoundingClientRect(); holder.scrollLeft += r.left + fx * r.width - cx; holder.scrollTop += r.top + fy * r.height - cy;
   }
   function startGesture() {
-    if (drag) { d.chart.crop = drag.snapCrop; d.chart.view = drag.snapView; d.chart.cell = drag.snapCell; d.chart.cropSet = drag.snapSet; drag = null; measuring = false; drawRect(); drawCell(); updMeas(); }
+    if (drag) { E().crop = drag.snapCrop; d.chart.view = drag.snapView; d.chart.cell = drag.snapCell; E().cropSet = drag.snapSet; drag = null; measuring = false; drawRect(); drawCell(); updMeas(); }
     const m = mid(), r = holderBox.getBoundingClientRect();
     gest = { z: czoom, dist: m.dist, fx: (m.x - r.left) / r.width, fy: (m.y - r.top) / r.height };
     clearTimeout(reT);
@@ -1302,55 +1479,73 @@ function openSetup(pid, partId) {
     sumEl.textContent = ls.length ? `인식된 줄 ${ls.length}개 · 총 ${rows.size}단` : '아직 인식된 단이 없어요.';
     tagsEl.replaceChildren(...ls.slice(0, 40).map(L => h('span', { class: 'tag' }, L.a === L.b ? `${L.a}단` : `${L.a}~${L.b}단`)));
   }
-  function vis() { viewTools.hidden = !!d.chart.free; if (fromSeg.parentElement) fromSeg.parentElement.hidden = !!d.chart.free; chartSec.hidden = d.kind !== 'chart'; textSec.hidden = d.kind !== 'text'; firstField.hidden = d.mode !== 'flat'; wsField.hidden = d.mode !== 'flat'; }
+  function vis() { rangeBar.hidden = !!d.chart.free; if (d.chart.free && sel > 0) selectRange(0); freeField.hidden = d.kind !== 'chart'; tabBtn2.textContent = d.kind === 'text' ? '글 입력' : '범위 설정'; viewTools.hidden = !!d.chart.free; if (fromSeg.parentElement) fromSeg.parentElement.hidden = !!d.chart.free; chartSec.hidden = d.kind !== 'chart'; textSec.hidden = d.kind !== 'text'; firstField.hidden = d.mode !== 'flat'; }
 
   async function save() {
     showErr('');
     const P = projects[pid]; if (!P) { close(); return; }
     d.name = d.name.trim() || `부위 ${P.parts.length + (exist ? 0 : 1)}`;
     if (d.kind === 'chart') {
-      if (!sources[pid] && !exist) return showErr('도안 파일을 먼저 선택해 주세요.');
-      if (!d.chart.cropSet) return showErr('도안 위에서 차트 영역을 드래그해 주세요.');
-      if (d.chart.crop.w < .03 || d.chart.crop.h < .03) return showErr('차트 영역이 너무 작아요. 다시 드래그해 주세요.');
-      if (!(d.chart.rows >= 1) || !(d.chart.cols >= 1)) return showErr('시작 단·끝 단과 코 수를 확인해 주세요.');
+      if (!sources[pid] && !exist) { setTab(2); return showErr('프로젝트에 도안 파일이 없어요. 프로젝트 메뉴의 ‘도안 파일 바꾸기’로 넣어 주세요.'); }
+      if (!d.chart.cropSet) { setTab(2); return showErr('분홍 범위를 차트 테두리에 맞게 조정해 주세요.'); }
+      if (d.chart.crop.w < .03 || d.chart.crop.h < .03) { setTab(2); return showErr('차트 영역이 너무 작아요. 다시 드래그해 주세요.'); }
+      if (!(d.chart.rows >= 1) || !(d.chart.cols >= 1)) { setTab(2); return showErr('시작 단·끝 단과 코 수를 확인해 주세요.'); }
+      if (d.chart.free) d.chart.extra = [];
+      for (let k = 0; k < d.chart.extra.length; k++) { const x = d.chart.extra[k];
+        if (!x.cropSet) { setTab(2); selectRange(k + 1); return showErr(`범위 ${k + 2}의 위치를 차트 테두리에 맞게 조정해 주세요.`); }
+        if (!(x.rows >= 1)) { setTab(2); selectRange(k + 1); return showErr(`범위 ${k + 2}의 시작 단·끝 단을 확인해 주세요.`); }
+        if (d.chart.multi !== 'seq') x.page = d.chart.page; }
+      if (!d.chart.extra.length) delete d.chart.multi;
     } else {
       d.text.lines = parseText(d.text.raw, d.needle === 'crochet');
-      if (!d.text.lines.length) return showErr('단 번호가 있는 줄을 찾지 못했어요. “1단: …” 형식으로 적어 주세요.');
+      if (!d.text.lines.length) { setTab(2); return showErr('단 번호가 있는 줄을 찾지 못했어요. “1단: …” 형식으로 적어 주세요.'); }
     }
     if (d.kind === 'chart' && d.chart.free) d.chart.view = null;
     if (d.kind === 'chart' && d.chart.view) { const c = d.chart.crop, v = d.chart.view, x0 = Math.min(c.x, v.x), y0 = Math.min(c.y, v.y), x1 = Math.max(c.x + c.w, v.x + v.w), y1 = Math.max(c.y + c.h, v.y + v.h); d.chart.view = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; }
     if (exist && P.parts.find(x => x.id === partId)) {
       const t = P.parts.find(x => x.id === partId);
       Object.assign(t, { name: d.name, kind: d.kind, needle: d.needle || 'knit', mode: d.mode, firstRow: d.firstRow, rsDir: d.rsDir, wsDir: d.wsDir, chart: d.chart, text: d.text });
-      if (t.kind === 'chart') { t.cur = clamp(t.cur, rStart(t.chart), rStart(t.chart) + t.chart.rows); }
+      if (t.kind === 'chart') { t.cur = clamp(t.cur, rStart(t.chart), rStart(t.chart) + span(t.chart)); }
     } else { if (d.kind === 'chart') d.cur = rStart(d.chart); P.parts.push(d); }
     ui.part[pid] = exist ? partId : d.id; saveUI(); touch(P); chartCache.clear(); close(); route();
   }
   const foot = h('div', { class: 'sheetfoot' },
     h('button', { class: 'btn', onclick: close }, '취소'),
     h('button', { class: 'btn pri', onclick: save }, '저장'));
-  const body = h('div', { class: 'sheetbody' },
+  const pane1 = h('div', {},
+    h('div', { class: 'field' }, h('label', {}, '도안 종류'), kindSeg),
     h('div', { class: 'field' }, h('label', {}, '부위 이름'), nameIn),
-    h('div', { class: 'qgrid' }, h('div', { class: 'q' }, h('label', { class: 'lab' }, '바늘'), needleSeg), h('div', { class: 'q' }, h('label', { class: 'lab' }, '도안 종류'), kindSeg), h('div', { class: 'q' }, h('label', { class: 'lab' }, '뜨는 방식'), modeSeg), firstField, h('div', { class: 'q' }, dirLab, dirSeg), wsField),
-    preview,
-    
-
-    
-    chartSec, textSec, err,
+    h('div', { class: 'qgrid' }, h('div', { class: 'q' }, h('label', { class: 'lab' }, '바늘'), needleSeg), h('div', { class: 'q' }, h('label', { class: 'lab' }, '뜨는 방식'), modeSeg), firstField, h('div', { class: 'q' }, dirLab, dirSeg)),
+    preview, freeField,
     exist ? h('div', { class: 'field', style: 'margin-top:24px' },
       exist.kind === 'chart' && getMk(exist).length ? h('button', { class: 'btn', style: 'margin-right:8px', onclick: async () => { if (await askConfirm('이 부위의 마커링 표시를 모두 지울까요?', '지우기', true)) { const t = P0().parts.find(x => x.id === partId); if (t) { t.markers = {}; t.mk = []; touch(P0()); d.mk = []; toast('마커링을 모두 지웠어요'); route(); } } } }, '마커링 모두 지우기') : null,
       h('button', { class: 'btn danger', onclick: async () => { if (await askConfirm(`“${exist.name}” 부위와 단 기록을 지울까요?`, '지우기', true)) { const P = P0(); P.parts = P.parts.filter(x => x.id !== partId); delete ui.part[pid]; saveUI(); touch(P); close(); route(); } } }, '이 부위 삭제')) : null);
+  const pane2 = h('div', { hidden: true }, chartSec, textSec);
+  const body = h('div', { class: 'sheetbody' }, err, pane1, pane2);
+  let tab = 1;
+  const tabBtn1 = h('button', { type: 'button', role: 'tab', onclick: () => setTab(1) }, '도안 설정');
+  const tabBtn2 = h('button', { type: 'button', role: 'tab', onclick: () => setTab(2) }, '범위 설정');
+  const tabsEl = h('div', { class: 'stabs', role: 'tablist' }, tabBtn1, tabBtn2);
+  function setTab(n) {
+    if (tab === n) return; tab = n;
+    pane1.hidden = n !== 1; pane2.hidden = n !== 2;
+    tabBtn1.classList.toggle('on', n === 1); tabBtn2.classList.toggle('on', n === 2);
+    tabBtn1.setAttribute('aria-selected', String(n === 1)); tabBtn2.setAttribute('aria-selected', String(n === 2));
+    body.scrollTop = 0;
+    if (n === 2 && d.kind === 'chart' && !holder.querySelector('canvas')) loadPage();
+  }
+  tabBtn1.classList.add('on'); tabBtn1.setAttribute('aria-selected', 'true'); tabBtn2.setAttribute('aria-selected', 'false');
   const P0 = () => projects[pid];
   const sheet = h('div', { class: 'sheet tall wide', role: 'dialog', 'aria-modal': 'true' },
-    h('div', { class: 'sheethead' }, h('h2', {}, exist ? '부위 설정' : '새 부위'), h('button', { class: 'icon', 'aria-label': '닫기', onclick: close }, '✕')), body, foot);
+    h('div', { class: 'sheethead' }, h('h2', {}, exist ? '부위 설정' : '새 부위'), h('button', { class: 'icon', 'aria-label': '닫기', onclick: close }, '✕')), tabsEl, body, foot);
   lay.append(sheet); document.body.append(lay);
-  updMeas(); drawCell(); vis(); summarize(); syncRows(); relabel(); lay.addEventListener('change', updPreview); lay.addEventListener('input', updPreview); loadPage();
+  updMeas(); drawCell(); renderRangeBar(); vis(); summarize(); syncRows(); relabel(); lay.addEventListener('change', updPreview); lay.addEventListener('input', updPreview); lay.addEventListener('click', updPreview); loadPage();
 }
 
 /* ---------- 시작 준비 (유의사항 · 코 잡기) ---------- */
 function newPrepPart(name, prep) {
   return { id: uid(), name: name || '시작 준비', kind: 'prep', mode: 'flat', firstRow: 'RS', rsDir: 'rtl', wsDir: 'ltr', markers: {}, mk: [], log: [], cur: 1,
-    text: { raw: '', lines: [] }, chart: { page: 1, crop: { x: .08, y: .08, w: .84, h: .84 }, cropSet: false, rowStart: 1, rowEnd: 20, rows: 20, cols: 20, colsAuto: false, fromTop: false, rot: 0 },
+    text: { raw: '', lines: [] }, chart: { page: 1, crop: { x: .2, y: .2, w: .6, h: .6 }, cropSet: false, rowStart: 1, rowEnd: 20, rows: 20, cols: 20, colsAuto: false, fromTop: false, rot: 0 },
     prep: Object.assign({ castOn: null, hint: '', notes: [], castDone: null, nchk: {} }, prep || {}) };
 }
 function buildPrep(p, part, host) {
