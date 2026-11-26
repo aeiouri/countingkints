@@ -54,6 +54,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .ci1 b{font-size:26px;font-weight:400;margin-right:2px}
 .ci2{font-size:12px;color:var(--muted);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .btn.on{background:var(--ink);color:var(--paper)}
+.splitrow{display:flex;gap:14px;padding-top:18px}
+.splitpane{position:relative;flex:1;min-width:0;background:#fff}
 .rdone{position:absolute;inset:0;background:rgba(120,120,120,.55);display:flex;align-items:center;justify-content:center;pointer-events:none}
 .rdone span{background:#fff;color:#555;font-size:12px;font-weight:700;padding:2px 8px;border-radius:8px}
 .rtag{position:absolute;left:0;top:0;transform:translateY(-100%);background:#E0336B;color:#fff;font-size:11px;font-style:normal;font-weight:700;padding:1px 6px;border-radius:6px 6px 0 0;pointer-events:none}
@@ -198,6 +200,7 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .hd{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#E0336B;border:3px solid #fff;pointer-events:none}
 .rowone{position:absolute;left:4px;padding:0 6px;border-radius:6px;background:#E0336B;color:#fff;font-size:12px;font-weight:700;pointer-events:none}
 .hd[data-k=t],.hd[data-k=b]{width:44px;height:10px;margin:-5px 0 0 -22px;border-radius:5px;border-width:2px}
+.hd[data-k=tl],.hd[data-k=tr],.hd[data-k=bl],.hd[data-k=br]{width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:4px}
 .hd[data-k=m]{width:34px;height:34px;margin:-17px 0 0 -17px;border-width:2px;opacity:.9;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;line-height:1;font-style:normal}
 .hd[data-k=l],.hd[data-k=r]{width:10px;height:44px;margin:-22px 0 0 -5px;border-radius:5px;border-width:2px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
@@ -600,6 +603,7 @@ function ranges(ch) {
   const base = { page: ch.page || 1, crop: ch.crop, rowStart: rStart(ch), rows: ch.rows || 1, fromTop: !!ch.fromTop };
   return [base, ...(ch.extra || []).map(e => ({ page: e.page || ch.page || 1, crop: e.crop, rowStart: e.rowStart || 1, rows: e.rows || 1, fromTop: e.fromTop != null ? !!e.fromTop : !!ch.fromTop }))];
 }
+function isSplit(ch) { return !!(ch && ch.split && ch.split.on && !ch.free && !multiOf(ch)); }
 const multiOf = ch => (ch && ch.extra && ch.extra.length && !ch.free) ? (ch.multi === 'seq' ? 'seq' : 'together') : null;
 function span(ch) { const m = multiOf(ch); if (!m) return ch.rows; const R = ranges(ch); return m === 'seq' ? R.reduce((a, r) => a + r.rows, 0) : Math.max(...R.map(r => r.rows)); }
 function togLocal(ch, r, k) { const N = r.rows; if (k <= N || ch.short !== 'repeat') return { row: k, cycle: 1, done: k > N }; return { row: ((k - 1) % N) + 1, cycle: Math.floor((k - 1) / N) + 1, done: false }; }
@@ -876,7 +880,7 @@ function buildTracker(p, part, host) {
     const setZoom = d => { const i = clamp(zs.indexOf(ui.zoom[part.id] || 1) + d, 0, zs.length - 1); ui.zoom[part.id] = zs[i]; saveUI(); applyZoom(); scrollToRow(false); };
     const toggleMark = on => { ctx.markEdit = on; markBtn.classList.toggle('on', on); mbar.hidden = !on; mlayer && mlayer.classList.toggle('edit', on); };
     markBtn = h('button', { class: 'tb', onclick: () => (free ? toggleHl(!ed.on) : toggleMark(!ctx.markEdit)) }, free ? '하이라이트 편집' : '마커링 편집');
-    if (multiOf(part.chart)) markBtn.hidden = true;
+    if (multiOf(part.chart) || isSplit(part.chart)) markBtn.hidden = true;
     mbar = h('div', { class: 'mbar', hidden: true },
       h('span', { class: 'small muted' }, '색'),
       MARK.slice(1).map((c, i) => h('button', { class: 'msw' + (i === 0 ? ' on' : ''), 'aria-label': MARK_NAME[i + 1], style: 'background:' + c, onclick: () => { ctx.markColor = i + 1; mbar.querySelectorAll('.msw').forEach((b, k) => b.classList.toggle('on', k === i)); } })),
@@ -911,11 +915,11 @@ function buildTracker(p, part, host) {
     inner.addEventListener('click', e => {
       const pt = PT(); if (!pt || ctx.markEdit || pt.chart.free) return;
       const m = multiOf(pt.chart), R = ranges(pt.chart);
-      const cand = m ? (boxes || []).map(b => ({ i: b.i, el: b.tint.parentElement.parentElement })) : [{ i: 0, el: cbox }];
+      const cand = (m || isSplit(pt.chart)) ? (boxes || []).map(b => ({ i: b.i, el: b.tint.parentElement.parentElement, sy: b.sy })) : [{ i: 0, el: cbox }];
       const hit = cand.find(x => { const q = x.el.getBoundingClientRect(); return e.clientX >= q.left && e.clientX < q.right && e.clientY >= q.top && e.clientY < q.bottom; });
       if (!hit) return; const i = hit.i, bx = hit.el;
       const S = i === 0 ? pt.chart.sym : (pt.chart.extra[i - 1] || {}).sym; if (!S || S.basis !== symBasis(R[i])) return;
-      const rc = bx.getBoundingClientRect(), fx = (e.clientX - rc.left) / rc.width, fy = (e.clientY - rc.top) / rc.height;
+      const rc = bx.getBoundingClientRect(), fx = (e.clientX - rc.left) / rc.width; let fy = (e.clientY - rc.top) / rc.height; if (hit.sy) fy = hit.sy[0] + fy * (hit.sy[1] - hit.sy[0]);
       const c = S.xs.findIndex((v, k) => k < S.xs.length - 1 && fx >= v && fx < S.xs[k + 1]), rr = S.ys.findIndex((v, k) => k < S.ys.length - 1 && fy >= v && fy < S.ys[k + 1]);
       if (c < 0 || rr < 0) return;
       const cl = S.clusters[S.rowsTop[rr].charCodeAt(c) - 48]; if (cl) showSymbol(cl.sym);
@@ -931,8 +935,32 @@ function buildTracker(p, part, host) {
   tools.push(histBtn, setBtn, resetBtn);
   curUI.tools.replaceChildren(...tools);
 
+  async function loadSplit(pt) {
+    const ch = pt.chart, N = ch.rows, rs = rStart(ch), a = clamp((ch.split.at | 0) - rs + 1, 1, N - 1), cr = ch.crop, ft = !!ch.fromTop;
+    const parts = [ft ? [0, a / N] : [1 - a / N, 1], ft ? [a / N, 1] : [0, 1 - a / N]];
+    const src = await ensureSource(p); if (T !== ctx) return;
+    if (!src) { chartWrap.replaceChildren(h('div', { class: 'empty' }, '도안 파일을 불러오지 못했어요.')); return; }
+    const cvs = [];
+    for (const [y0, y1] of parts) {
+      const rect = { x: cr.x, y: cr.y + y0 * cr.h, w: cr.w, h: (y1 - y0) * cr.h }, key = [pt.id, ch.page, ch.rot || 0, 'split', rect.x.toFixed(4), rect.y.toFixed(4), rect.w.toFixed(4), rect.h.toFixed(4)].join('|');
+      let c = chartCache.get(key);
+      if (!c) { try { c = await renderRegion(src, ch.page, rect, 1600, ch.rot); } catch (e) { chartWrap.replaceChildren(h('div', { class: 'empty' }, '도안을 그리지 못했어요.')); return; } if (chartCache.size > 6) chartCache.delete(chartCache.keys().next().value); chartCache.set(key, c); }
+      cvs.push(c);
+    }
+    if (T !== ctx) return;
+    const rowsN = [a, N - a], starts = [rs, rs + a];
+    boxes = cvs.map((c, j) => {
+      const t = h('div', { class: 'tint' }), l = h('div', { class: 'hl' }), done = h('div', { class: 'rdone', hidden: true }), tag = h('i', { class: 'rtag' }, `${starts[j]}~${starts[j] + rowsN[j] - 1}단`);
+      c.style.width = '100%'; c.style.height = 'auto'; c.style.display = 'block';
+      const box = h('div', { class: 'cbox', style: 'left:0;top:0;width:100%;height:100%' }, h('div', { class: 'ov' }, t, l), done, tag);
+      return { i: 0, r: { rows: rowsN[j], fromTop: ft, rowStart: starts[j] }, tint: t, hl: l, done, tag, sy: parts[j], split: j, pane: h('div', { class: 'splitpane' }, c, box) };
+    });
+    inner.replaceChildren(h('div', { class: 'splitrow', style: `align-items:${ft ? 'flex-start' : 'flex-end'}` }, ...boxes.map(b => b.pane)));
+    chartWrap.querySelector('.loading')?.remove(); inner.hidden = false; layoutChart(); scrollToRow(false);
+  }
   async function loadChart() {
     const pt = PT(); if (!pt) return;
+    if (isSplit(pt.chart)) return loadSplit(pt);
     const m = multiOf(pt.chart), R = ranges(pt.chart);
     let pg = pt.chart.page, region, idx = 0;
     if (m === 'seq') { idx = seqIndex(pt.chart, pt.cur).i; pg = R[idx].page; region = idx === 0 ? (pt.chart.view || R[0].crop) : R[idx].crop; }
@@ -1085,6 +1113,12 @@ function buildTracker(p, part, host) {
     if (free) { renderShapes(); return; }
     const pt = PT(); if (!pt) return;
     const m = multiOf(pt.chart);
+    if (isSplit(pt.chart) && boxes && boxes[0] && boxes[0].split != null) {
+      const k = pt.cur - rStart(pt.chart) + 1, [A, B] = boxes;
+      paintBox(A, Math.min(k, A.r.rows + 1)); A.done.hidden = true;
+      paintBox(B, k - A.r.rows); B.done.hidden = true;
+      hl = k <= A.r.rows ? A.hl : B.hl; return;
+    }
     if (m && boxes) {
       if (m === 'seq') { const q = seqIndex(pt.chart, pt.cur); if (q.i !== shownIdx) { loadChart(); return; } paintBox(boxes[0], q.local + 1); hl = boxes[0].hl; }
       else { const k = pt.cur - rStart(pt.chart) + 1; const fin = k > span(pt.chart); boxes.forEach(b => { const q = fin ? { row: 0, cycle: 1, done: true } : togLocal(pt.chart, b.r, k); paintBox(b, q.done ? b.r.rows + 1 : q.row); b.tag.textContent = (b.i + 1) + (q.cycle > 1 ? ` · ${q.cycle}회차` : ''); }); const live = boxes.find(b => !b.hl.hidden); hl = live ? live.hl : boxes[0].hl; }
@@ -1145,9 +1179,9 @@ function buildTracker(p, part, host) {
     }
     const infos = fin ? [] : rowInfoFor(pt, r);
     c3.hidden = !infos.length; c3.replaceChildren(...infos.flatMap((t, i) => [i ? h('br') : null,
-      t.delta ? h('span', { class: 'chip' }, (t.delta > 0 ? '늘림 +' : '줄임 ') + t.delta + '코') : null, t.cable ? h('span', { class: 'chip' }, '케이블') : null,
-      t.tag || null, t.text].filter(Boolean)));
-    c3.onclick = () => modal(`${r}단 뜨는 법`, infos.map(t => h('p', {}, (t.tag ? h('b', {}, t.tag) : ''), t.text, t.delta ? ` (콧수 ${t.delta > 0 ? '+' : ''}${t.delta})` : '')), [{ label: '닫기', cls: 'pri', val: null }]);
+      t.tag || null, h('span', { class: 'chip' }, `총 ${t.st}코`), t.delta ? h('span', { class: 'chip' }, (t.delta > 0 ? '늘림 +' : '줄임 ') + t.delta + '코') : null, t.cable ? h('span', { class: 'chip' }, '케이블') : null,
+      t.text].filter(Boolean)));
+    c3.onclick = () => modal(`${r}단 뜨는 법`, infos.map(t => h('p', {}, (t.tag ? h('b', {}, t.tag) : ''), `총 ${t.st}코 · `, t.text, t.delta ? ` (콧수 ${t.delta > 0 ? '+' : ''}${t.delta})` : '')), [{ label: '닫기', cls: 'pri', val: null }]);
     const le = lastLog(pt);
     ctx.lastT = le ? le.t : null; ctx.relEl = null; c2.replaceChildren();
     if (le) { ctx.relEl = h('b', {}, rel(le.t)); c2.append(`${doneCount}/${tot}단 · 마지막 ${le.r}단 `, ctx.relEl, ` · ${md(le.t)} ${fmtTime(le.t)}`); }
@@ -1281,7 +1315,7 @@ function openSetup(pid, partId) {
   const rectEl = h('div', { class: 'croprect' });
   const gridSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); gridSvg.setAttribute('viewBox', '0 0 100 100'); gridSvg.setAttribute('preserveAspectRatio', 'none');
   const rowOne = h('span', { class: 'rowone' }, '1단');
-  const hds = ['t', 'b', 'l', 'r', 'm'].map(k => h('i', { class: 'hd', 'data-k': k }, k === 'm' ? '✥' : ''));
+  const hds = ['t', 'b', 'l', 'r', 'tl', 'tr', 'bl', 'br', 'm'].map(k => h('i', { class: 'hd', 'data-k': k }, k === 'm' ? '✥' : ''));
   rectEl.append(gridSvg, rowOne, ...hds);
   const cellEl = h('div', { class: 'cellrect', hidden: true });
   const viewEl = h('div', { class: 'viewrect', hidden: true });
@@ -1312,7 +1346,7 @@ function openSetup(pid, partId) {
   const pageLab = h('span', { class: 'small muted' });
   const fileNote = h('div', { class: 'hint' });
   const rowsInfo = h('div', { class: 'hint' });
-  const syncRows = () => { const c = E(); c.rows = Math.max(0, (c.rowEnd || 0) - (c.rowStart || 0) + 1); chainSeq(); rowsInfo.textContent = c.rows > 0 ? `${c.rowStart}~${c.rowEnd}단 · 총 ${c.rows}단` : '끝 단이 시작 단보다 작아요'; if (typeof updMulti === 'function') updMulti(); if (typeof symInfo !== 'undefined') updSym(); drawGrid(); };
+  const syncRows = () => { const c = E(); c.rows = Math.max(0, (c.rowEnd || 0) - (c.rowStart || 0) + 1); chainSeq(); rowsInfo.textContent = c.rows > 0 ? `${c.rowStart}~${c.rowEnd}단 · 총 ${c.rows}단` : '끝 단이 시작 단보다 작아요'; if (typeof updMulti === 'function') updMulti(); if (typeof symInfo !== 'undefined') { updSym(); updSplit(); } drawGrid(); };
   function chainSeq() { if (d.chart.multi !== 'seq') return; let e = d.chart.rowEnd; d.chart.extra.forEach(x => { const n = Math.max(1, (x.rowEnd || 0) - (x.rowStart || 0) + 1); x.rowStart = e + 1; x.rowEnd = x.rowStart + n - 1; x.rows = n; e = x.rowEnd; }); if (sel > 0 && typeof rsIn !== 'undefined') { rsIn.value = E().rowStart; reIn.value = E().rowEnd; } }
   const rsIn = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', min: 1, max: 999, value: d.chart.rowStart, oninput: e => { E().rowStart = parseInt(e.target.value, 10) || 0; syncRows(); } });
   const reIn = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', min: 1, max: 999, value: d.chart.rowEnd, oninput: e => { E().rowEnd = parseInt(e.target.value, 10) || 0; syncRows(); } });
@@ -1348,7 +1382,7 @@ function openSetup(pid, partId) {
     await loadPage();
     holder.scrollLeft = fx * holder.scrollWidth - holder.clientWidth / 2; holder.scrollTop = fy * holder.scrollHeight - holder.clientHeight / 2;
   };
-  pageBar.append(h('button', { class: 'btn sm', type: 'button', onclick: () => { d.chart.rot = ((d.chart.rot || 0) + 90) % 360; d.chart.crop = { x: .2, y: .2, w: .6, h: .6 }; d.chart.cropSet = false; d.chart.extra.forEach(x => { x.crop = { x: .2, y: .2, w: .6, h: .6 }; x.cropSet = false; }); d.chart.view = null; edRow.hidden = true; setEditing('crop'); loadPage(); } }, '↻ 회전'), h('span', { style: 'margin-left:auto;display:flex;gap:6px;align-items:center' },
+  pageBar.append(h('button', { class: 'btn sm', type: 'button', onclick: () => { d.chart.rot = ((d.chart.rot || 0) + 90) % 360; d.chart.crop = { x: .2, y: .2, w: .6, h: .6 }; d.chart.cropSet = false; d.chart.cropTouched = false; d.chart.extra.forEach(x => { x.crop = { x: .2, y: .2, w: .6, h: .6 }; x.cropSet = false; x.cropTouched = false; }); d.chart.view = null; edRow.hidden = true; setEditing('crop'); loadPage(); } }, '↻ 회전'), h('span', { style: 'margin-left:auto;display:flex;gap:6px;align-items:center' },
     h('button', { class: 'btn sm', type: 'button', 'aria-label': '축소', onclick: () => setCZ(-1) }, '－'), zlab,
     h('button', { class: 'btn sm', type: 'button', 'aria-label': '확대', onclick: () => setCZ(1) }, '＋')));
   const freeSeg = seg([[false, '격자 자동'], [true, '직접 그리기']], () => !!d.chart.free, v => { d.chart.free = v; vis(); drawGrid(); });
@@ -1374,13 +1408,13 @@ function openSetup(pid, partId) {
       ...Array.from({ length: n }, (_, k) => h('button', { class: 'btn sm' + (k === sel ? ' on' : ''), type: 'button', onclick: () => selectRange(k) }, `범위 ${k + 1}`)),
       h('button', { class: 'btn sm', type: 'button', onclick: addRange }, '＋ 범위 추가'),
       sel > 0 ? h('button', { class: 'btn sm danger', type: 'button', onclick: delRange }, '이 범위 삭제') : null);
-    rangeBar.hidden = !!d.chart.free; updMulti();
+    rangeBar.hidden = !!d.chart.free; updMulti(); if (typeof splitField !== 'undefined') updSplit();
   }
   function selectRange(k) {
     sel = clamp(k, 0, d.chart.extra.length);
     setEditing('crop'); viewTools.hidden = sel > 0 || !!d.chart.free;
     rsIn.value = E().rowStart; reIn.value = E().rowEnd; rsIn.disabled = d.chart.multi === 'seq' && sel > 0;
-    fromSeg.paint(); multiSeg.paint(); shortSeg.paint(); updSym(); syncRows(); renderRangeBar(); loadPage();
+    fromSeg.paint(); multiSeg.paint(); shortSeg.paint(); updSym(); updSplit(); syncRows(); renderRangeBar(); loadPage();
   }
   function addRange() {
     const last = d.chart.extra.length ? d.chart.extra[d.chart.extra.length - 1] : d.chart;
@@ -1393,6 +1427,18 @@ function openSetup(pid, partId) {
     if (sel === 0) return;
     if (!await askConfirm(`이 범위(범위 ${sel + 1})를 지울까요?`, '지우기', true)) return;
     d.chart.extra.splice(sel - 1, 1); chainSeq(); selectRange(sel - 1);
+  }
+  const splitAt = h('input', { class: 'inp', type: 'number', inputmode: 'numeric', style: 'max-width:110px', oninput: e => { d.chart.split = Object.assign(d.chart.split || {}, { at: parseInt(e.target.value, 10) || 0 }); updSplit(); } });
+  const splitSeg = seg([[false, '한 화면'], [true, '둘로 나눠 보기']], () => !!(d.chart.split && d.chart.split.on), v => { d.chart.split = Object.assign(d.chart.split || {}, { on: v }); if (v && !d.chart.split.at) d.chart.split.at = d.chart.rowStart + Math.ceil((d.chart.rows || 2) / 2) - 1; splitAt.value = d.chart.split.at || ''; updSplit(); });
+  const splitHint = h('p', { class: 'hint' }), splitRow = h('div', { class: 'row2', style: 'gap:8px;align-items:center;margin-top:8px' }, h('span', { class: 'small muted' }, '앞쪽 마지막 단'), splitAt);
+  const splitField = h('div', { class: 'field' }, h('label', {}, '세로로 긴 차트 나눠 보기'), splitSeg, splitRow, splitHint);
+  splitAt.value = (d.chart.split && d.chart.split.at) || '';
+  function updSplit() {
+    const on = !!(d.chart.split && d.chart.split.on);
+    splitField.hidden = !!d.chart.free || d.chart.extra.length > 0 || sel > 0; splitRow.hidden = !on;
+    if (!on) { splitHint.textContent = '세로로 긴 차트를 두 부분으로 잘라 나란히 보여줘요. 가로 화면에서 보기 좋아요.'; return; }
+    const at = d.chart.split.at, rs = d.chart.rowStart, re = d.chart.rowEnd;
+    splitHint.textContent = (at >= rs && at < re) ? `${rs}~${at}단과 ${at + 1}~${re}단이 나란히 보여요.` : `${rs}~${re - 1} 사이의 단 번호를 넣어 주세요.`;
   }
   const symInfo = h('p', { class: 'hint' });
   const symBtn = h('button', { class: 'btn', type: 'button', onclick: runSym }, '기호 인식하기');
@@ -1425,7 +1471,7 @@ function openSetup(pid, partId) {
     h('div', { class: 'field', style: 'margin-top:-8px' }, rowsInfo, h('p', { class: 'hint' }, '이 차트가 몇 단부터 몇 단까지인지 넣어 주세요. 예: 49~96단 차트면 시작 49, 끝 96. 총 단 수는 자동으로 계산돼요.')),
     
     h('div', { class: 'field' }, h('label', {}, '시작 단 위치'), fromSeg, h('p', { class: 'hint' }, '분홍 가로선이 도안의 단과 맞는지 확인해 주세요. 맞지 않으면 영역이나 시작·끝 단을 조정해요.')),
-    symField);
+    splitField, symField);
   function turn(dv) { const src = sources[pid]; if (!src) return; const np = clamp((E().page || 1) + dv, 1, src.n); if (d.chart.multi === 'seq') E().page = np; else { d.chart.page = np; d.chart.extra.forEach(x => { x.page = np; }); } loadPage(); }
   async function loadPage() {
     const src = await ensureSource(p);
@@ -1433,14 +1479,15 @@ function openSetup(pid, partId) {
     fileNote.textContent = '';
     rectEl.hidden = false; pageLab.textContent = `${E().page || 1} / ${src.n} 페이지`;
     const c = await renderRegion(src, E().page || 1, null, Math.min(3000, 1200 * czoom), d.chart.rot);
-    d.chart.aspect = c.width / c.height; holder.querySelector('canvas')?.remove(); holderBox.prepend(c); drawRect();
+    d.chart.aspect = c.width / c.height; 
+    if (!E().cropSet && !E().cropTouched) { const a = c.width / c.height, cr = a < 1 ? { w: .6, h: .6 * a } : { h: .6, w: .6 / a }; cr.x = (1 - cr.w) / 2; cr.y = (1 - cr.h) / 2; E().crop = cr; }holder.querySelector('canvas')?.remove(); holderBox.prepend(c); drawRect();
   }
   function drawRect() {
     const c = E().crop;
     othersEl.replaceChildren(...[d.chart, ...d.chart.extra].map((x, k) => (k === sel || (x.page || d.chart.page || 1) !== (E().page || 1)) ? null : h('div', { class: 'orect', style: `left:${x.crop.x * 100}%;top:${x.crop.y * 100}%;width:${x.crop.w * 100}%;height:${x.crop.h * 100}%` }, h('b', {}, '범위 ' + (k + 1)))).filter(Boolean));
     rectEl.style.cssText = `left:${c.x * 100}%;top:${c.y * 100}%;width:${c.w * 100}%;height:${c.h * 100}%`;
     const vw = d.chart.view; viewEl.hidden = !vw; viewOff.hidden = !vw; if (vw) viewEl.style.cssText = `left:${vw.x * 100}%;top:${vw.y * 100}%;width:${vw.w * 100}%;height:${vw.h * 100}%`;
-    const pos = { t: [50, 0], b: [50, 100], l: [0, 50], r: [100, 50], m: [50, 50] };
+    const pos = { t: [50, 0], b: [50, 100], l: [0, 50], r: [100, 50], tl: [0, 0], tr: [100, 0], bl: [0, 100], br: [100, 100], m: [50, 50] };
     hds.forEach(n => { const q = pos[n.dataset.k]; n.style.left = q[0] + '%'; n.style.top = q[1] + '%'; });
     drawGrid();
   }
@@ -1470,13 +1517,13 @@ function openSetup(pid, partId) {
     if (gest) { moveGesture(); return; }
     if (lockUntilUp) return;
     const [px, py, rc] = rel2(e), c = R();
-    if (!drag) { const onM = Math.hypot((px - (c.x + c.w / 2)) * rc.width, (py - (c.y + c.h / 2)) * rc.height) <= 24; const hit = measuring ? null : onM ? 'm' : edgeAt(px, py, rc, c); ov.style.cursor = hit === 'm' ? 'move' : hit ? (hit === 't' || hit === 'b' ? 'ns-resize' : 'ew-resize') : 'grab'; return; }
+    if (!drag) { const onM = Math.hypot((px - (c.x + c.w / 2)) * rc.width, (py - (c.y + c.h / 2)) * rc.height) <= 24; const hit = measuring ? null : onM ? 'm' : edgeAt(px, py, rc, c); ov.style.cursor = hit === 'm' ? 'move' : hit === 'tl' || hit === 'br' ? 'nwse-resize' : hit === 'tr' || hit === 'bl' ? 'nesw-resize' : hit ? (hit === 't' || hit === 'b' ? 'ns-resize' : 'ew-resize') : 'grab'; return; }
     if (drag.mode === 'pan') { holder.scrollLeft = drag.sl - (e.clientX - drag.cx); holder.scrollTop = drag.st - (e.clientY - drag.cy); ov.style.cursor = 'grabbing'; return; }
     let n;
     if (drag.mode === 'cell') { d.chart.cell = { x: Math.min(drag.sx, px), y: Math.min(drag.sy, py), w: Math.abs(px - drag.sx), h: Math.abs(py - drag.sy) }; drawCell(); drawGrid(); return; }
     if (drag.mode === 'm') n = { x: clamp(px - drag.ox, 0, 1 - c.w), y: clamp(py - drag.oy, 0, 1 - c.h), w: c.w, h: c.h };
-    else { let x1 = c.x, y1 = c.y, x2 = c.x + c.w, y2 = c.y + c.h; const m = drag.mode; if (m === 'l') x1 = px; else if (m === 'r') x2 = px; else if (m === 't') y1 = py; else if (m === 'b') y2 = py; n = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) }; }
-    if (editing === 'view') d.chart.view = n; else { E().crop = n; E().cropSet = true; } drawRect();
+    else { let x1 = c.x, y1 = c.y, x2 = c.x + c.w, y2 = c.y + c.h; const m = drag.mode; if (m.includes('l')) x1 = px; if (m.includes('r')) x2 = px; if (m.includes('t')) y1 = py; if (m.includes('b')) y2 = py; n = { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) }; }
+    if (editing === 'view') d.chart.view = n; else { E().crop = n; E().cropSet = true; E().cropTouched = true; } drawRect();
   });
   const ptrs = new Map(); let gest = null, lockUntilUp = false, reT = null;
   function mid() { const a = [...ptrs.values()]; return { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, dist: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1 }; }
@@ -1502,6 +1549,8 @@ function openSetup(pid, partId) {
   holder.addEventListener('gesturechange', e => e.preventDefault());
   function edgeAt(px, py, rc, c) {
     const inX = px >= c.x - .02 && px <= c.x + c.w + .02, inY = py >= c.y - .02 && py <= c.y + c.h + .02;
+    const X = { l: c.x, r: c.x + c.w }, Y = { t: c.y, b: c.y + c.h };
+    for (const v of ['t', 'b']) for (const u of ['l', 'r']) if (Math.hypot((px - X[u]) * rc.width, (py - Y[v]) * rc.height) < 22) return v + u;
     const cand = [['t', Math.abs(py - c.y) * rc.height, inX], ['b', Math.abs(py - c.y - c.h) * rc.height, inX], ['l', Math.abs(px - c.x) * rc.width, inY], ['r', Math.abs(px - c.x - c.w) * rc.width, inY]];
     let hit = null, best = 18;
     for (const [k, dist, ok] of cand) if (ok && dist < best) { best = dist; hit = k; }
@@ -1550,6 +1599,10 @@ function openSetup(pid, partId) {
         if (!(x.rows >= 1)) { setTab(2); selectRange(k + 1); return showErr(`범위 ${k + 2}의 시작 단·끝 단을 확인해 주세요.`); }
         if (d.chart.multi !== 'seq') x.page = d.chart.page; }
       if (!d.chart.extra.length) delete d.chart.multi;
+      if (d.chart.split && d.chart.split.on) {
+        if (d.chart.extra.length || d.chart.free) d.chart.split.on = false;
+        else if (!(d.chart.split.at >= d.chart.rowStart && d.chart.split.at < d.chart.rowEnd)) { setTab(2); return showErr(`나눠 보기의 단 번호를 ${d.chart.rowStart}~${d.chart.rowEnd - 1} 사이로 넣어 주세요.`); }
+      }
     } else {
       d.text.lines = parseText(d.text.raw, d.needle === 'crochet');
       if (!d.text.lines.length) { setTab(2); return showErr('단 번호가 있는 줄을 찾지 못했어요. “1단: …” 형식으로 적어 주세요.'); }
@@ -1593,7 +1646,7 @@ function openSetup(pid, partId) {
   const sheet = h('div', { class: 'sheet tall wide', role: 'dialog', 'aria-modal': 'true' },
     h('div', { class: 'sheethead' }, h('h2', {}, exist ? '부위 설정' : '새 부위'), h('button', { class: 'icon', 'aria-label': '닫기', onclick: close }, '✕')), tabsEl, body, foot);
   lay.append(sheet); document.body.append(lay);
-  updMeas(); drawCell(); renderRangeBar(); updSym(); vis(); summarize(); syncRows(); relabel(); lay.addEventListener('change', updPreview); lay.addEventListener('input', updPreview); lay.addEventListener('click', updPreview); loadPage();
+  updMeas(); drawCell(); renderRangeBar(); updSym(); updSplit(); vis(); summarize(); syncRows(); relabel(); lay.addEventListener('change', updPreview); lay.addEventListener('input', updPreview); lay.addEventListener('click', updPreview); loadPage();
 }
 
 /* ---------- 시작 준비 (유의사항 · 코 잡기) ---------- */
@@ -1765,12 +1818,12 @@ function rowTextOf(pt, R, rowNum) {
   const sd = sideOf(pt, rowNum);
   let cells = [...line].map(ch => S.clusters[ch.charCodeAt(0) - 48]);
   if (sd.dir === 'rtl') cells = cells.reverse();
-  const items = []; let delta = 0, cable = false, unknown = false;
+  const items = []; let delta = 0, cable = false, unknown = false, st = 0;
   for (let i = 0; i < cells.length; i++) {
     const sym = cells[i] && dict.symbols[cells[i].sym];
-    if (!sym) { unknown = true; push('?'); continue; }
+    if (!sym) { unknown = true; st++; push('?'); continue; }
     if (sym.kind === 'none') continue;
-    delta += Number(sym.delta) || 0;
+    st++; delta += Number(sym.delta) || 0;
     if (sym.kind === 'cable') {
       let j = i, name = null;
       while (j < cells.length) { const s2 = cells[j] && dict.symbols[cells[j].sym]; if (!s2 || s2.kind !== 'cable') break; if (!name && !s2.cont) name = s2.name; j++; }
@@ -1779,7 +1832,7 @@ function rowTextOf(pt, R, rowNum) {
     push((sd.rs ? sym.rs : sym.ws) || sym.name);
   }
   function push(l) { const t = items[items.length - 1]; if (t && t.l === l && t.n) t.n++; else items.push({ l, n: 1 }); }
-  return { text: items.map(x => x.n ? `${x.l} ${x.n}` : x.l).join(' · '), delta, cable, unknown };
+  return { text: items.map(x => x.n ? `${x.l} ${x.n}` : x.l).join(' · '), delta, cable, unknown, st };
 }
 function rowInfoFor(pt, r) {
   if (pt.kind !== 'chart' || pt.chart.free) return [];
