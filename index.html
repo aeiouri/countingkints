@@ -59,6 +59,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .splitline{position:absolute;height:24px;margin-top:-12px;cursor:ns-resize;touch-action:none;z-index:5;background:linear-gradient(transparent 10px,#7B3FE4 10px,#7B3FE4 13px,transparent 13px);background-size:100% 100%}
 .splitline::before{content:'';position:absolute;left:0;right:0;top:10px;height:3px;background:repeating-linear-gradient(90deg,#fff 0 6px,transparent 6px 12px)}
 .splitline span{position:absolute;right:0;top:-8px;transform:translateY(-100%);background:#7B3FE4;color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;white-space:nowrap}
+.repchip{background:#EFE7FD;color:#5B2DB8}
 .rdone{position:absolute;inset:0;background:rgba(120,120,120,.55);display:flex;align-items:center;justify-content:center;pointer-events:none}
 .rdone span{background:#fff;color:#555;font-size:12px;font-weight:700;padding:2px 8px;border-radius:8px}
 .rtag{position:absolute;left:0;top:0;transform:translateY(-100%);background:#E0336B;color:#fff;font-size:11px;font-style:normal;font-weight:700;padding:1px 6px;border-radius:6px 6px 0 0;pointer-events:none}
@@ -66,7 +67,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .orect b{position:absolute;left:0;top:0;background:#E0336B;color:#fff;font-size:11px;padding:1px 6px;border-radius:0 0 6px 0}
 .viewrect{position:absolute;outline:2px dashed #1E88E5;outline-offset:-1px;background:rgba(30,136,229,.08);pointer-events:none}
 .viewrect .hd{background:#1E88E5}
-.cbox{position:absolute;pointer-events:none}
+.cbox{position:absolute;pointer-events:none;z-index:1;-webkit-transform:translateZ(0);transform:translateZ(0)}
 .slayer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden}
 .elayer{position:absolute;inset:0;touch-action:none;cursor:crosshair;pointer-events:auto}
 .hbar-sep{flex:none;width:1px;align-self:stretch;background:var(--line)}
@@ -123,10 +124,11 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .sw{width:14px;height:14px;border-radius:50%;display:inline-block}
 .chartscroll{overflow-x:auto;overflow-y:hidden;padding:6px 8px}
 .chartinner{position:relative;margin:0 auto;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15)}
-.chartinner canvas{display:block;width:100%;height:auto}
+.chartinner canvas{display:block;width:100%;height:auto;position:relative;z-index:0}
+.splitpane canvas{position:relative;z-index:0}
 .ov{position:absolute;inset:0;pointer-events:none}
 .tint{position:absolute;left:0;right:0;background:rgba(90,120,100,.24)}
-.hl{position:absolute;left:0;right:0;background:rgba(255,233,40,.55);mix-blend-mode:multiply}
+.hl{position:absolute;left:0;right:0;background:rgba(255,222,0,.42);box-shadow:inset 0 2px 0 rgba(214,160,0,.85),inset 0 -2px 0 rgba(214,160,0,.85)}
 .mlayer{position:absolute;inset:0}
 .mlayer.edit{pointer-events:auto;cursor:crosshair}
 .mline{position:absolute;top:0;bottom:0;width:2px;transform:translateX(-50%);box-shadow:0 0 0 .5px rgba(255,255,255,.75)}
@@ -614,11 +616,26 @@ function span(ch) { const m = multiOf(ch); if (!m) return ch.rows; const R = ran
 function togLocal(ch, r, k) { const N = r.rows; if (k <= N || ch.short !== 'repeat') return { row: k, cycle: 1, done: k > N }; return { row: ((k - 1) % N) + 1, cycle: Math.floor((k - 1) / N) + 1, done: false }; }
 function seqIndex(ch, cur) { const R = ranges(ch); let s = rStart(ch); for (let i = 0; i < R.length; i++) { if (cur < s + R[i].rows) return { i, local: Math.max(0, cur - s) }; s += R[i].rows; } const l = R.length - 1; return { i: l, local: R[l].rows }; }
 const total = pt => pt.kind === 'chart' ? span(pt.chart) : textRows(pt).length;
-const doneMap = pt => { const m = new Map(); pt.log.forEach(e => { if (!m.has(e.r) || m.get(e.r) < e.t) m.set(e.r, e.t); }); return m; };
+/* 반복 구간: { id, from, to, mode: 'extra'(처음 뜬 뒤 추가로 N회) | 'total'(총 N회) | 'until'(길이가 될 때까지), times, cm, gauge } */
+function repBlocks(pt) { return (pt.reps || []).filter(b => b.from <= b.to).slice().sort((a, b) => a.from - b.from); }
+const repP = b => b.mode === 'until' ? Infinity : b.mode === 'total' ? Math.max(1, b.times | 0) : Math.max(0, b.times | 0) + 1;
+const repAt = (pt, r) => repBlocks(pt).find(b => r >= b.from && r <= b.to) || null;
+const repPass = (pt, b) => (pt.rc && pt.rc[b.id]) || 0;
+const repEnded = (pt, b) => !!(pt.rcEnd && pt.rcEnd[b.id]);
+function repLabel(pt, b) { const k = repPass(pt, b); if (b.mode === 'until') return `${b.from}~${b.to}단 ${k + 1}회차`; if (b.mode === 'total') return `${b.from}~${b.to}단 ${k + 1}/${repP(b)}회`; return k === 0 ? `${b.from}~${b.to}단 처음 · 이후 ${b.times}회 반복` : `${b.from}~${b.to}단 반복 ${k}/${b.times}회`; }
+function repDone(pt) { let x = 0; for (const b of repBlocks(pt)) x += repPass(pt, b) * (b.to - b.from + 1); return x; }
+function repPlanned(pt) { let x = 0, unk = false; for (const b of repBlocks(pt)) { const len = b.to - b.from + 1; if (b.mode === 'until') { if (b.cm > 0 && b.gauge > 0) x += Math.max(0, Math.round(b.cm / 10 * b.gauge) - len); else unk = true; } else x += (repP(b) - 1) * len; } return { x, unk }; }
+const doneMap = pt => { const m = new Map(); pt.log.forEach(e => { const b = repAt(pt, e.r); if (b && !repEnded(pt, b) && (e.p == null ? 0 : e.p) !== repPass(pt, b)) return; if (!m.has(e.r) || m.get(e.r) < e.t) m.set(e.r, e.t); }); return m; };
+/* 서술도안에서 “3, 4단을 10회 반복” 같은 문장 찾기 */
+function findRepeats(raw) {
+  const out = [], re = /(\d+)\s*단?\s*(?:[,~\-·]|와|과|부터|에서|및)\s*(\d+)\s*단?\s*(?:까지)?\s*(?:을|를)?\s*(?:총\s*)?(\d+)\s*(?:회|번)\s*(?:더\s*)?반복/g;
+  let m; while ((m = re.exec(raw || ''))) { const a = +m[1], b = +m[2], n = +m[3]; if (a <= b && n > 0 && !out.some(x => x.from === a && x.to === b)) out.push({ from: a, to: b, times: n }); }
+  return out;
+}
 function currentRow(pt) {
   if (pt.kind === 'chart') return pt.cur;
   const dm = doneMap(pt), rows = textRows(pt);
-  for (const r of rows) if (!dm.has(r)) return r;
+  for (const r of rows) { const b = repAt(pt, r); if (b && repEnded(pt, b)) continue; if (!dm.has(r)) return r; }
   return Infinity;
 }
 function sideOf(pt, r) {
@@ -928,7 +945,7 @@ function buildTracker(p, part, host) {
       const rc = bx.getBoundingClientRect(), fx = (e.clientX - rc.left) / rc.width; const fy = (e.clientY - rc.top) / rc.height;
       const c = S.xs.findIndex((v, k) => k < S.xs.length - 1 && fx >= v && fx < S.xs[k + 1]), rr = S.ys.findIndex((v, k) => k < S.ys.length - 1 && fy >= v && fy < S.ys[k + 1]);
       if (c < 0 || rr < 0) return;
-      const cl = S.clusters[S.rowsTop[rr].charCodeAt(c) - 48]; if (cl) showSymbol(cl.sym);
+      let cc = c; while (cc > 0 && S.rowsTop[rr][cc] === '~') cc--; const cl = S.clusters[S.rowsTop[rr].charCodeAt(cc) - 48]; if (cl) showSymbol(cl.sym);
     });
     chartWrap = h('div', { class: 'chartscroll' }, h('div', { class: 'loading' }, '도안을 불러오는 중이에요…'), inner);
     inner.hidden = true;
@@ -943,7 +960,7 @@ function buildTracker(p, part, host) {
 
   async function loadSplit(pt) {
     const ch = pt.chart, reg = dispRegion(ch), R = ranges(ch), sy = clamp(ch.split.y == null ? .5 : ch.split.y, .05, .95), ft = !!ch.fromTop;
-    const pieces = ft ? [[0, sy], [sy, 1]] : [[sy, 1], [0, sy]];
+    const pieces = [[0, sy], [sy, 1]]; /* 위쪽 조각은 왼쪽, 아래쪽 조각은 오른쪽 */
     const src = await ensureSource(p); if (T !== ctx) return;
     if (!src) { chartWrap.replaceChildren(h('div', { class: 'empty' }, '도안 파일을 불러오지 못했어요.')); return; }
     const out = [];
@@ -964,7 +981,7 @@ function buildTracker(p, part, host) {
         pane.append(box); boxes.push({ i, r, tint: t, hl: l, done, tag, split: j, y0, y1, pane });
       });
     });
-    inner.replaceChildren(h('div', { class: 'splitrow', style: `align-items:${ft ? 'flex-start' : 'flex-end'}` }, ...panes));
+    inner.replaceChildren(h('div', { class: 'splitrow', style: 'align-items:flex-start' }, ...panes));
     chartWrap.querySelector('.loading')?.remove(); inner.hidden = false; layoutChart(); scrollToRow(false);
   }
   async function loadChart() {
@@ -1019,7 +1036,7 @@ function buildTracker(p, part, host) {
     if (!ed.on) {
       shapes.forEach(s => { if (s.b < cur) kids.push(svgEl('path', { d: shapePath(s, W, H), fill: 'rgba(90,120,100,.24)', 'fill-rule': 'evenodd' })); });
       const c = shapeOf(pt, cur);
-      if (c) kids.push(svgEl('path', { d: shapePath(c, W, H), fill: 'rgba(255,233,40,.55)', 'fill-rule': 'evenodd', style: 'mix-blend-mode:multiply' }));
+      if (c) kids.push(svgEl('path', { d: shapePath(c, W, H), fill: 'rgba(255,222,0,.42)', 'fill-rule': 'evenodd' }));
     } else {
       shapes.forEach(s => {
         const sel = ed.row >= s.a && ed.row <= s.b;
@@ -1179,8 +1196,9 @@ function buildTracker(p, part, host) {
   function refresh(scroll) {
     const pt = PT(); if (!pt) return;
     const tot = total(pt), r = currentRow(pt), rs0 = pt.kind === 'chart' ? rStart(pt.chart) : 1, fin = !Number.isFinite(r) || (pt.kind === 'chart' && r - rs0 + 1 > tot);
-    const doneCount = pt.kind === 'chart' ? clamp(pt.cur - rs0, 0, tot) : doneMap(pt).size;
-    barI.style.width = (tot ? doneCount / tot * 100 : 0) + '%';
+    const rpl = repPlanned(pt), totP = tot + rpl.x, doneCount = (pt.kind === 'chart' ? clamp(pt.cur - rs0, 0, tot) : doneMap(pt).size) + repDone(pt);
+    barI.style.width = (totP ? Math.min(100, doneCount / totP * 100) : 0) + '%';
+    const cnt = rpl.unk ? `누적 ${doneCount}단` : `${doneCount}/${totP}단`;
     c1.replaceChildren();
     if (fin) c1.append('완료 · 모든 단을 다 떴어요');
     else {
@@ -1190,16 +1208,21 @@ function buildTracker(p, part, host) {
         h('span', { class: 'dirchip' }, (sd.dir === 'rtl' ? '← 오른쪽' : '→ 왼쪽') + (pt.mode === 'round' ? ' · 원통' : '')),
         pt.kind === 'chart' && multiOf(pt.chart) ? ' ' : null, pt.kind === 'chart' && multiOf(pt.chart) ? h('span', { class: 'dirchip' }, multiOf(pt.chart) === 'seq' ? `범위 ${seqIndex(pt.chart, r).i + 1}/${ranges(pt.chart).length}` : ranges(pt.chart).map((x, i) => { const q = togLocal(pt.chart, x, r - rStart(pt.chart) + 1); return q.done ? `${i + 1}: 완료` : `${i + 1}: ${x.rowStart + q.row - 1}단`; }).join(' · ')) : null,
         cl && cl.s ? ' ' : null, cl && cl.s ? h('span', { class: 'dirchip' }, `${cl.s}코`) : null].filter(x => x !== null));
+      const rb = repAt(pt, r);
+      if (rb && !repEnded(pt, rb)) c1.append(...[' ', h('span', { class: 'dirchip repchip' }, repLabel(pt, rb)), rb.mode === 'until' ? h('button', { class: 'btn sm', style: 'margin-left:6px', onclick: async () => {
+        if (!await askConfirm(`${rb.from}~${rb.to}단 반복을 여기서 끝낼까요? 다음 단부터 이어서 떠요.`, '반복 끝내기')) return;
+        const q = PT(); q.rcEnd = Object.assign({}, q.rcEnd, { [rb.id]: true }); if (q.kind === 'chart') q.cur = rb.to + 1; touch(P()); refresh(true); } }, '반복 끝내기') : null].filter(Boolean));
     }
     const infos = fin ? [] : rowInfoFor(pt, r);
     c3.hidden = !infos.length; c3.replaceChildren(...infos.map(t => h('div', {}, t.tag || '', h('b', {}, `${t.st}코`), t.delta ? ` (${t.delta > 0 ? '+' : ''}${t.delta})` : '', ' · ', t.text)));
     c3.onclick = () => modal(`${r}단 뜨는 법`, infos.map(t => h('p', {}, (t.tag ? h('b', {}, t.tag) : ''), `총 ${t.st}코 · `, t.text, t.delta ? ` (콧수 ${t.delta > 0 ? '+' : ''}${t.delta})` : '')), [{ label: '닫기', cls: 'pri', val: null }]);
     const le = lastLog(pt);
     ctx.lastT = le ? le.t : null; ctx.relEl = null; c2.replaceChildren();
-    if (le) { ctx.relEl = h('b', {}, rel(le.t)); c2.append(`${doneCount}/${tot}단 · 마지막 ${le.r}단 `, ctx.relEl, ` · ${md(le.t)} ${fmtTime(le.t)}`); }
-    else c2.append(`${doneCount}/${tot}단 · 아직 체크 없음`);
+    if (le) { ctx.relEl = h('b', {}, rel(le.t)); c2.append(`${cnt} · 마지막 ${le.r}단 `, ctx.relEl, ` · ${md(le.t)} ${fmtTime(le.t)}`); }
+    else c2.append(`${cnt} · 아직 체크 없음`);
     nextBtn.disabled = fin;
     prevBtn.disabled = !pt.log.length && !(pt.kind === 'chart' && pt.cur > rs0);
+    if (pt.kind === 'chart' && fin) { const ub = repBlocks(pt).find(b => b.mode === 'until' && b.to === rs0 + tot - 1 && !repEnded(pt, b)); if (ub) nextBtn.disabled = false; }
     if (pt.kind === 'chart') { layoutChart(); if (scroll) scrollToRow(true); } else renderCards(scroll);
   }
   async function resetCount() {
@@ -1214,14 +1237,21 @@ function buildTracker(p, part, host) {
   function next() {
     const pt = PT(); if (!pt) return;
     const r = currentRow(pt); if (!Number.isFinite(r) || (pt.kind === 'chart' && r > rStart(pt.chart) + span(pt.chart) - 1)) return;
-    const e = { r, t: Date.now() };
-    pt.log.push(e); const before = pt.cur; if (pt.kind === 'chart') pt.cur = r + 1;
+    const e = { r, t: Date.now() }, b = repAt(pt, r); if (b) e.p = repPass(pt, b);
+    const before = pt.cur, beforeRc = clone(pt.rc || {}); pt.log.push(e);
+    let looped = false;
+    if (b && r === b.to && repPass(pt, b) + 1 < repP(b) && (pt.kind === 'chart' || textRows(pt).filter(x => x >= b.from && x <= b.to).every(x => doneMap(pt).has(x)))) { pt.rc = Object.assign({}, pt.rc, { [b.id]: repPass(pt, b) + 1 }); looped = true; }
+    if (pt.kind === 'chart') pt.cur = looped ? b.from : r + 1;
     touch(P()); refresh(true);
-    toast(`${r}단 체크 · ${fmtTime(e.t, true)}`, { label: '되돌리기', fn: () => { const q = PT(); const i = q.log.indexOf(e); if (i >= 0) q.log.splice(i, 1); if (q.kind === 'chart') q.cur = before; touch(P()); refresh(true); } });
+    toast(`${r}단 체크` + (looped ? ` · ${repLabel(pt, b)} 시작` : ` · ${fmtTime(e.t, true)}`), { label: '되돌리기', fn: () => { const q = PT(); const i = q.log.indexOf(e); if (i >= 0) q.log.splice(i, 1); if (q.kind === 'chart') q.cur = before; q.rc = beforeRc; touch(P()); refresh(true); } });
   }
   function undo() {
     const pt = PT(); if (!pt) return;
-    if (pt.kind === 'chart') {
+    if (repBlocks(pt).length) {
+      let k = -1; pt.log.forEach((e, i) => { if (k < 0 || e.t >= pt.log[k].t) k = i; });
+      if (k < 0) { if (pt.kind === 'chart' && pt.cur > rStart(pt.chart)) pt.cur -= 1; else return; }
+      else { const e = pt.log[k]; pt.log.splice(k, 1); const b = repAt(pt, e.r); if (b) { pt.rc = Object.assign({}, pt.rc, { [b.id]: e.p || 0 }); if (pt.rcEnd) delete pt.rcEnd[b.id]; } if (pt.kind === 'chart') pt.cur = e.r; }
+    } else if (pt.kind === 'chart') {
       if (pt.cur <= rStart(pt.chart)) return;
       pt.cur -= 1;
       let k = -1; pt.log.forEach((e, i) => { if (e.r === pt.cur && (k < 0 || e.t >= pt.log[k].t)) k = i; });
@@ -1234,9 +1264,12 @@ function buildTracker(p, part, host) {
   }
   function toggleRow(r) {
     const pt = PT(); if (!pt) return;
-    const had = pt.log.filter(e => e.r === r);
-    if (had.length) { pt.log = pt.log.filter(e => e.r !== r); touch(P()); refresh(false); toast(`${r}단 체크를 풀었어요`, { label: '되돌리기', fn: () => { PT().log.push(...had); touch(P()); refresh(false); } }); }
-    else { const e = { r, t: Date.now() }; pt.log.push(e); touch(P()); refresh(false); toast(`${r}단 체크 · ${fmtTime(e.t, true)}`); }
+    const b = repAt(pt, r), cur = b ? repPass(pt, b) : null, mine = e => e.r === r && (!b || (e.p == null ? 0 : e.p) === cur);
+    const had = pt.log.filter(mine);
+    if (had.length) { pt.log = pt.log.filter(e => !mine(e)); touch(P()); refresh(false); toast(`${r}단 체크를 풀었어요`, { label: '되돌리기', fn: () => { PT().log.push(...had); touch(P()); refresh(false); } }); }
+    else { const e = { r, t: Date.now() }; if (b) e.p = cur; pt.log.push(e);
+      let looped = false; if (b && cur + 1 < repP(b) && textRows(pt).filter(x => x >= b.from && x <= b.to).every(x => doneMap(pt).has(x))) { pt.rc = Object.assign({}, pt.rc, { [b.id]: cur + 1 }); looped = true; }
+      touch(P()); refresh(false); toast(`${r}단 체크` + (looped ? ` · ${repLabel(pt, b)} 시작` : ` · ${fmtTime(e.t, true)}`)); }
   }
   host.append(...[mbar, tmain, bottom].filter(Boolean));
   refresh(false);
@@ -1453,7 +1486,7 @@ function openSetup(pid, partId) {
   function updSplit() {
     const on = !!(d.chart.split && d.chart.split.on);
     splitField.hidden = !!d.chart.free || (d.chart.extra.length > 0 && d.chart.multi === 'seq');
-    splitHint.textContent = on ? '도안 위 보라색 점선을 위아래로 끌어서 나눌 위치를 정해요. 점선 아래쪽과 위쪽이 도안 화면에서 왼쪽·오른쪽으로 나란히 보여요.' + (d.chart.extra.length ? ' 범위 여러 개를 모두 감싸는 영역을 기준으로 나눠요.' : d.chart.view ? ' 파랑 범위를 기준으로 나눠요.' : '') : '세로로 긴 차트를 두 부분으로 잘라 나란히 보여줘요. 가로 화면에서 보기 좋아요.';
+    splitHint.textContent = on ? '도안 위 보라색 점선을 위아래로 끌어서 나눌 위치를 정해요. 점선 위쪽은 왼쪽, 아래쪽은 오른쪽에 나란히 보여요.' + (d.chart.extra.length ? ' 범위 여러 개를 모두 감싸는 영역을 기준으로 나눠요.' : d.chart.view ? ' 파랑 범위를 기준으로 나눠요.' : '') : '세로로 긴 차트를 두 부분으로 잘라 나란히 보여줘요. 가로 화면에서 보기 좋아요.';
   }
   const symInfo = h('p', { class: 'hint' });
   const symBtn = h('button', { class: 'btn', type: 'button', onclick: runSym }, '기호 인식하기');
@@ -1465,7 +1498,7 @@ function openSetup(pid, partId) {
     symField.hidden = !!d.chart.free;
     if (!S) symInfo.textContent = '범위를 맞춘 뒤 누르면 칸을 나눠서 기호 모양을 찾아요. 기호를 알려주면 단마다 뜨는 법을 글로 풀어 드려요.';
     else if (!ok) symInfo.textContent = '범위나 단 수가 바뀌었어요. 다시 인식해 주세요.';
-    else { const unk = S.clusters.filter(c => !dict.symbols[c.sym]).length; symInfo.textContent = `${S.rows}단 × ${S.cols}코 · 모양 ${S.clusters.length}가지` + (unk ? ` · 아직 모르는 모양 ${unk}가지` : ' · 모두 연결됨'); }
+    else { const live = S.clusters.filter(c => c.n > 0), unk = live.filter(c => !dict.symbols[c.sym]).length; symInfo.textContent = `${S.rows}단 × ${S.cols}코 · 모양 ${live.length}가지` + (unk ? ` · 아직 모르는 모양 ${unk}가지` : ' · 모두 연결됨'); }
   }
   async function runSym() {
     const src = await ensureSource(p); if (!src) { showErr('도안 파일이 있어야 인식할 수 있어요.'); return; }
@@ -1577,7 +1610,7 @@ function openSetup(pid, partId) {
   ov.addEventListener('pointerup', endDrag); ov.addEventListener('pointercancel', endDrag);
 
   /* 서술도안 */
-  const rawIn = h('textarea', { class: 'inp', placeholder: '1단: 겉뜨기 20코\n2단: 안뜨기 20코\n3~5단: 겉뜨기 …', oninput: e => { d.text.raw = e.target.value; summarize(); } });
+  const rawIn = h('textarea', { class: 'inp', placeholder: '1단: 겉뜨기 20코\n2단: 안뜨기 20코\n3~5단: 겉뜨기 …', oninput: e => { d.text.raw = e.target.value; summarize(); paintReps(); } });
   rawIn.value = d.text.raw;
   const tagsEl = h('div', { class: 'tags' }), sumEl = h('div', { class: 'hint' });
   const pullBtn = h('button', { class: 'btn sm', type: 'button', onclick: async () => {
@@ -1628,7 +1661,7 @@ function openSetup(pid, partId) {
     if (d.kind === 'chart' && d.chart.view) { const c = d.chart.crop, v = d.chart.view, x0 = Math.min(c.x, v.x), y0 = Math.min(c.y, v.y), x1 = Math.max(c.x + c.w, v.x + v.w), y1 = Math.max(c.y + c.h, v.y + v.h); d.chart.view = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; }
     if (exist && P.parts.find(x => x.id === partId)) {
       const t = P.parts.find(x => x.id === partId);
-      Object.assign(t, { name: d.name, kind: d.kind, needle: d.needle || 'knit', mode: d.mode, firstRow: d.firstRow, rsDir: d.rsDir, wsDir: d.wsDir, chart: d.chart, text: d.text });
+      Object.assign(t, { name: d.name, kind: d.kind, needle: d.needle || 'knit', mode: d.mode, firstRow: d.firstRow, rsDir: d.rsDir, wsDir: d.wsDir, chart: d.chart, text: d.text, reps: d.reps });
       if (t.kind === 'chart') { t.cur = clamp(t.cur, rStart(t.chart), rStart(t.chart) + span(t.chart)); }
     } else { if (d.kind === 'chart') d.cur = rStart(d.chart); P.parts.push(d); }
     ui.part[pid] = exist ? partId : d.id; saveUI(); touch(P); chartCache.clear(); close(); route();
@@ -1636,11 +1669,41 @@ function openSetup(pid, partId) {
   const foot = h('div', { class: 'sheetfoot' },
     h('button', { class: 'btn', onclick: close }, '취소'),
     h('button', { class: 'btn pri', onclick: save }, '저장'));
+  d.reps = clone(d.reps || []);
+  const repList = h('div', {}), repSug = h('div', {});
+  const repField = h('div', { class: 'field' }, h('label', {}, '반복 구간'), repList, repSug,
+    h('button', { class: 'btn sm', type: 'button', onclick: () => editRep(null) }, '＋ 반복 구간 추가'),
+    h('p', { class: 'hint' }, '“3, 4단을 10회 반복”이나 “30cm가 될 때까지 반복”처럼 같은 단을 여러 번 뜨는 부분을 넣어 두면 회차를 세면서 돌아가요.'));
+  const repText = b => `${b.from}~${b.to}단 · ` + (b.mode === 'until' ? '길이가 될 때까지' + (b.cm ? ` (${b.cm}cm` + (b.gauge ? `, 10cm당 ${b.gauge}단)` : ')') : '') : b.mode === 'total' ? `총 ${b.times}회` : `처음 뜬 뒤 ${b.times}회 더`);
+  function paintReps() {
+    repList.replaceChildren(...d.reps.map(b => h('div', { class: 'symrow' }, h('div', { style: 'flex:1' }, repText(b)),
+      h('button', { class: 'btn sm', type: 'button', onclick: () => editRep(b) }, '고치기'),
+      h('button', { class: 'btn sm danger', type: 'button', onclick: () => { d.reps = d.reps.filter(x => x !== b); paintReps(); } }, '지우기'))));
+    const found = d.kind === 'text' ? findRepeats(d.text.raw).filter(f => !d.reps.some(b => b.from === f.from && b.to === f.to)) : [];
+    repSug.replaceChildren(...found.map(f => h('div', { class: 'symrow' }, h('div', { style: 'flex:1' }, h('span', { class: 'small muted' }, '도안에서 찾았어요 · '), `${f.from}~${f.to}단 ${f.times}회 반복`),
+      h('button', { class: 'btn sm pri', type: 'button', onclick: () => { d.reps.push({ id: uid(), from: f.from, to: f.to, mode: 'extra', times: f.times }); paintReps(); } }, '넣기'))));
+  }
+  async function editRep(b) {
+    const x = b ? clone(b) : { id: uid(), from: d.kind === 'chart' ? d.chart.rowStart : 1, to: d.kind === 'chart' ? d.chart.rowEnd : 2, mode: 'extra', times: 1 };
+    const num = (v, ph) => { const i = h('input', { class: 'inp', type: 'number', inputmode: 'decimal', placeholder: ph || '' }); i.value = v == null ? '' : v; return i; };
+    const fI = num(x.from), tI = num(x.to), nI = num(x.times), cI = num(x.cm, '예: 30'), gI = num(x.gauge, '예: 28');
+    const nF = h('div', { class: 'field' }, h('label', { class: 'lab' }, '횟수'), nI), lF = h('div', {}, h('div', { class: 'two field' }, h('div', {}, h('label', { class: 'lab' }, '목표 길이(cm)'), cI), h('div', {}, h('label', { class: 'lab' }, '10cm당 단 수'), gI)), h('p', { class: 'hint' }, '길이와 게이지를 넣으면 필요한 단 수를 어림해 드려요. 비워 둬도 돼요.'));
+    const upd = () => { nF.hidden = x.mode === 'until'; lF.hidden = x.mode !== 'until'; };
+    const mSeg = seg([['extra', '처음 뜬 뒤 N회 더'], ['total', '총 N회'], ['until', '길이까지']], () => x.mode, v => { x.mode = v; upd(); }); upd();
+    const ok = await modal(b ? '반복 구간 고치기' : '반복 구간 추가', [h('div', { class: 'two field' }, h('div', {}, h('label', { class: 'lab' }, '시작 단'), fI), h('div', {}, h('label', { class: 'lab' }, '끝 단'), tI)),
+      h('div', { class: 'field' }, h('label', { class: 'lab' }, '반복 방식'), mSeg), nF, lF], [{ label: '취소', val: false }, { label: '저장', cls: 'pri', val: true }]);
+    if (!ok) return;
+    x.from = parseInt(fI.value, 10); x.to = parseInt(tI.value, 10); x.times = parseInt(nI.value, 10) || 1; x.cm = parseFloat(cI.value) || null; x.gauge = parseFloat(gI.value) || null;
+    if (!(x.from >= 1 && x.to >= x.from)) { toast('시작 단과 끝 단을 확인해 주세요'); return; }
+    if (d.reps.some(o => o.id !== x.id && !(x.to < o.from || x.from > o.to))) { toast('다른 반복 구간과 겹쳐요'); return; }
+    if (b) Object.assign(b, x); else d.reps.push(x); paintReps();
+  }
+  paintReps();
   const pane1 = h('div', {},
     h('div', { class: 'field' }, h('label', {}, '도안 종류'), kindSeg),
     h('div', { class: 'field' }, h('label', {}, '부위 이름'), nameIn),
     h('div', { class: 'qgrid' }, h('div', { class: 'q' }, h('label', { class: 'lab' }, '바늘'), needleSeg), h('div', { class: 'q' }, h('label', { class: 'lab' }, '뜨는 방식'), modeSeg), firstField, h('div', { class: 'q' }, dirLab, dirSeg)),
-    preview, freeField,
+    preview, freeField, repField,
     exist ? h('div', { class: 'field', style: 'margin-top:24px' },
       exist.kind === 'chart' && getMk(exist).length ? h('button', { class: 'btn', style: 'margin-right:8px', onclick: async () => { if (await askConfirm('이 부위의 마커링 표시를 모두 지울까요?', '지우기', true)) { const t = P0().parts.find(x => x.id === partId); if (t) { t.markers = {}; t.mk = []; touch(P0()); d.mk = []; toast('마커링을 모두 지웠어요'); route(); } } } }, '마커링 모두 지우기') : null,
       h('button', { class: 'btn danger', onclick: async () => { if (await askConfirm(`“${exist.name}” 부위와 단 기록을 지울까요?`, '지우기', true)) { const P = P0(); P.parts = P.parts.filter(x => x.id !== partId); delete ui.part[pid]; saveUI(); touch(P); close(); route(); } } }, '이 부위 삭제')) : null);
@@ -1749,6 +1812,15 @@ function decF(b) { const s = atob(b), f = new Float32Array(s.length); for (let i
 function fdist0(a, b, dx, dy) { let d = 0, k = 0; for (let y = 1; y < FN - 1; y++) for (let x = 1; x < FN - 1; x++) { const v = a[y * FN + x] - b[(y + dy) * FN + x + dx]; d += v * v; k++; } return d / k; }
 /* 칸 위치가 조금 어긋나도 같은 모양으로 보도록 한 칸씩 밀어 보며 가장 가까운 값 */
 function fdist(a, b) { let m = Infinity; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const d = fdist0(a, b, dx, dy); if (d < m) m = d; } return m; }
+function featOf(lum, W, H, x0, y0, x1, y1, ix = .08) {
+  const iw = x1 - x0, ih = y1 - y0, ax = x0 + iw * ix, ay = y0 + ih * .08, bw = iw * (1 - 2 * ix) / FN, bh = ih * .84 / FN, f = new Float32Array(FN * FN);
+  for (let by = 0; by < FN; by++) for (let bx = 0; bx < FN; bx++) {
+    let s = 0, k = 0; const sx = Math.floor(ax + bx * bw), ex = Math.max(sx + 1, Math.floor(ax + (bx + 1) * bw)), sy = Math.floor(ay + by * bh), ey = Math.max(sy + 1, Math.floor(ay + (by + 1) * bh));
+    for (let y = sy; y < ey && y < H; y++) for (let x = sx; x < ex && x < W; x++) { s += lum[y * W + x]; k++; }
+    f[by * FN + bx] = k ? 1 - s / k / 255 : 0;
+  }
+  return f;
+}
 function dotSample() { const f = new Float32Array(FN * FN); for (let y = 0; y < FN; y++) for (let x = 0; x < FN; x++) { const dx = x + .5 - FN / 2, dy = y + .5 - FN / 2; f[y * FN + x] = Math.hypot(dx, dy) < FN * .2 ? 1 : 0; } return encF(f); }
 function ensureBuiltins() {
   const S = dict.symbols;
@@ -1765,14 +1837,17 @@ function mergeDictRow(r) {
   if (rt > (dict.u || 0) && r.data && r.data.symbols) { dict = r.data; dict.u = rt; ensureBuiltins(); try { localStorage.setItem(dictKey(), JSON.stringify(dict)); } catch (e) {} }
   else if ((dict.u || 0) > rt) dictDirty = true;
 }
-function addSample(sym, b64) {
-  const f = decF(b64); sym.samples = sym.samples || [];
-  if (sym.samples.some(x => fdist(decF(x), f) < .004)) return;
-  sym.samples.push(b64); if (sym.samples.length > 24) sym.samples.shift();
+function addSample(sym, b64, n = 1) {
+  const f = decF(b64), tagd = n > 1 ? `S${n}:${b64}` : b64; sym.samples = sym.samples || [];
+  if (sym.samples.some(x => sampLen(x) === n && fdist(sampF(x), f) < .004)) return;
+  sym.samples.push(tagd); if (sym.samples.length > 24) sym.samples.shift();
 }
-function suggest(f) {
+/* 샘플 문자열: 한 칸 기호는 그대로, 여러 칸 기호는 'S{칸수}:' 머리표 */
+const sampLen = x => /^S\d+:/.test(x) ? parseInt(x.slice(1), 10) : 1;
+const sampF = x => decF(x.replace(/^S\d+:/, ''));
+function suggest(f, n = 1) {
   let best = null;
-  for (const sym of Object.values(dict.symbols)) for (const x of (sym.samples || [])) { const d = fdist(decF(x), f); if (!best || d < best.d) best = { id: sym.id, d }; }
+  for (const sym of Object.values(dict.symbols)) for (const x of (sym.samples || [])) { if (sampLen(x) !== n) continue; const d = fdist(sampF(x), f); if (!best || d < best.d) best = { id: sym.id, d }; }
   return best && best.d < .035 ? best.id : null;
 }
 
@@ -1793,36 +1868,44 @@ async function recognizeRange(src, R, rot) {
   let gridOk = true;
   if (!(ys.length - 1 === rows && regular(ys))) { gridOk = false; ys = Array.from({ length: rows + 1 }, (_, i) => i * H / rows); }
   if (!regular(xs)) { gridOk = false; const ch = H / rows, cols = Math.max(1, Math.round(W / ch)); xs = Array.from({ length: cols + 1 }, (_, i) => i * W / cols); }
-  const cols = xs.length - 1, feats = [];
+  const cols = xs.length - 1, clusters = [], rowsTop = [], cw = W / cols;
+  const o1 = Math.max(3, Math.round(cw * .07)), o2 = Math.max(7, Math.round(cw * .17));
+  const clusterOf = (f, key, n) => {
+    let idx = -1;
+    if (key) idx = clusters.findIndex(k => k.key === key);
+    else { let bd = .04; clusters.forEach((k, i) => { if (!k.key && k.n1 === n) { const d = fdist(k.f, f); if (d < bd) { bd = d; idx = i; } } }); }
+    if (idx < 0) { clusters.push({ key, f, n: 0, n1: n }); idx = clusters.length - 1; }
+    clusters[idx].n++; return idx;
+  };
   for (let r = 0; r < rows; r++) {
-    const line = [];
-    for (let c = 0; c < cols; c++) {
-      const x0 = xs[c] + 2, x1 = xs[c + 1] - 1, y0 = ys[r] + 2, y1 = ys[r + 1] - 1, iw = x1 - x0, ih = y1 - y0;
-      const ax = x0 + iw * .08, ay = y0 + ih * .08, bw = iw * .84 / FN, bh = ih * .84 / FN, f = new Float32Array(FN * FN);
-      for (let by = 0; by < FN; by++) for (let bx = 0; bx < FN; bx++) {
-        let s = 0, k = 0; const sx = Math.floor(ax + bx * bw), ex = Math.max(sx + 1, Math.floor(ax + (bx + 1) * bw)), sy = Math.floor(ay + by * bh), ey = Math.max(sy + 1, Math.floor(ay + (by + 1) * bh));
-        for (let y = sy; y < ey && y < H; y++) for (let x = sx; x < ex && x < W; x++) { s += lum[y * W + x]; k++; }
-        f[by * FN + bx] = k ? 1 - s / k / 255 : 0;
+    const y0 = ys[r], y1 = ys[r + 1], mg = (y1 - y0) * .2; /* 칸 위·아래 끝에서 맞닿는 선(서로 다른 교차 기호)은 연결로 보지 않아요 */
+    /* 칸 경계를 넘어가는 선이 있으면 두 칸을 잇기 */
+    const link = [];
+    for (let c = 0; c < cols - 1; c++) {
+      const xb = Math.round(xs[c + 1]); let hit = 0;
+      for (let y = Math.floor(y0 + mg); y < y1 - mg; y++) {
+        let l = false, rr = false;
+        for (let dy = -4; dy <= 4 && !l; dy++) { const yy = y + dy; if (yy < 0 || yy >= H) continue; for (let x = xb - o2; x <= xb - o1; x++) if (x >= 0 && lum[yy * W + x] < 110) { l = true; break; } }
+        if (l) for (let x = xb + o1; x <= xb + o2; x++) if (x < W && lum[y * W + x] < 110) { rr = true; break; }
+        if (l && rr) hit++;
       }
-      line.push(f);
+      link.push(hit >= 2);
     }
-    feats.push(line);
-  }
-  /* 같은 모양끼리 묶기 */
-  const clusters = [], rowsTop = [];
-  for (let r = 0; r < rows; r++) {
-    let str = '';
-    for (let c = 0; c < cols; c++) {
-      const f = feats[r][c]; let mean = 0, sq = 0; for (const v of f) { mean += v; sq += v * v; } mean /= f.length; const sd = Math.sqrt(Math.max(0, sq / f.length - mean * mean));
-      let key = mean < .03 ? 'blank' : (sd < .08 && mean > .15 ? 'gray' : null), idx = -1;
-      if (key) idx = clusters.findIndex(k => k.key === key);
-      else { let bd = .04; clusters.forEach((k, i) => { if (!k.key) { const d = fdist(k.f, f); if (d < bd) { bd = d; idx = i; } } }); }
-      if (idx < 0) { clusters.push({ key, f, n: 0 }); idx = clusters.length - 1; }
-      clusters[idx].n++; str += String.fromCharCode(48 + idx);
+    /* 묶음 만들기: 이어진 칸들. 3칸 이상짜리 묶음 둘이 바로 붙어 있으면 큰 교차(예: C8B) 하나로 합치기 */
+    const spans = []; let c = 0;
+    while (c < cols) { let e = c; while (e < cols - 1 && link[e]) e++; if (e > c) { const last = spans[spans.length - 1]; if (last && last[1] === c - 1 && last[1] - last[0] >= 2 && e - c >= 2) last[1] = e; else spans.push([c, e]); } c = e + 1; }
+    const spanAt = new Map(spans.map(sp => [sp[0], sp]));
+    let str = ''; c = 0;
+    while (c < cols) {
+      const sp = spanAt.get(c);
+      if (sp) { const n = sp[1] - sp[0] + 1, f = featOf(lum, W, H, xs[sp[0]] + 2, ys[r] + 2, xs[sp[1] + 1] - 1, ys[r + 1] - 1, .03); str += String.fromCharCode(48 + clusterOf(f, null, n)) + '~'.repeat(n - 1); c = sp[1] + 1; continue; }
+      const f = featOf(lum, W, H, xs[c] + 2, ys[r] + 2, xs[c + 1] - 1, ys[r + 1] - 1);
+      let mean = 0, sq = 0; for (const v of f) { mean += v; sq += v * v; } mean /= f.length; const sd = Math.sqrt(Math.max(0, sq / f.length - mean * mean));
+      str += String.fromCharCode(48 + clusterOf(f, mean < .03 ? 'blank' : (sd < .08 && mean > .15 ? 'gray' : null), 1)); c++;
     }
     rowsTop.push(str);
   }
-  const out = clusters.map(k => { const b = encF(k.f); const sug = k.key === 'blank' ? 'knit' : k.key === 'gray' ? 'none' : suggest(k.f); return { f: b, n: k.n, sym: sug, ok: k.key === 'blank' }; });
+  const out = clusters.map(k => { const b = encF(k.f); const sug = k.key === 'blank' ? 'knit' : k.key === 'gray' ? 'none' : suggest(k.f, k.n1); return { f: b, n: k.n, w: k.n1, sym: sug, ok: k.key === 'blank' }; });
   return { cols, rows, gridOk, xs: xs.map(v => v / W), ys: ys.map(v => v / H), rowsTop, clusters: out, basis: symBasis(R) };
 }
 const symBasis = R => [R.page || 1, R.rows, ...['x', 'y', 'w', 'h'].map(k => (+R.crop[k]).toFixed(4))].join('|');
@@ -1833,14 +1916,16 @@ function rowTextOf(pt, R, rowNum) {
   const k = rowNum - R.rowStart; if (k < 0 || k >= S.rows) return null;
   const line = S.rowsTop[R.fromTop ? k : S.rows - 1 - k]; if (!line) return null;
   const sd = sideOf(pt, rowNum);
-  let cells = [...line].map(ch => S.clusters[ch.charCodeAt(0) - 48]);
+  let cells = [];
+  for (let i = 0; i < line.length; i++) { if (line[i] === '~') continue; const cl = S.clusters[line.charCodeAt(i) - 48]; let n = 1; while (line[i + n] === '~') n++; cells.push(n > 1 ? Object.assign({}, cl, { span: n }) : cl); }
   if (sd.dir === 'rtl') cells = cells.reverse();
   const items = []; let delta = 0, cable = false, unknown = false, st = 0;
   for (let i = 0; i < cells.length; i++) {
     const sym = cells[i] && dict.symbols[cells[i].sym];
-    if (!sym) { unknown = true; st++; push('?'); continue; }
+    if (!sym) { unknown = true; const n = cells[i].span || 1; st += n; if (n > 1) items.push({ l: `? (${n}칸 기호)`, n: 0 }); else push('?'); continue; }
     if (sym.kind === 'none') continue;
     st++; delta += Number(sym.delta) || 0;
+    if (cells[i].span) { st += cells[i].span - 1; items.push({ l: `${(sd.rs ? sym.rs : sym.ws) || sym.name} (${cells[i].span}코)`, n: 0 }); if (sym.kind === 'cable') cable = true; continue; }
     if (sym.kind === 'cable') {
       let j = i, name = null;
       while (j < cells.length) { const s2 = cells[j] && dict.symbols[cells[j].sym]; if (!s2 || s2.kind !== 'cable') break; if (!name && !s2.cont) name = s2.name; j++; }
@@ -1891,8 +1976,8 @@ async function photoURL(file) {
   const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
   const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', .7);
 }
-function featThumb(b64, size = 40) {
-  const f = decF(b64), c = h('canvas', { width: FN, height: FN, class: 'fthumb', style: `width:${size}px;height:${size}px` }), x = c.getContext('2d');
+function featThumb(b64, size = 40, n = 1) {
+  const f = sampF(b64), c = h('canvas', { width: FN, height: FN, class: 'fthumb', style: `width:${Math.round(size * Math.min(n, 3) / (n > 1 ? 1.5 : 1))}px;height:${size}px` }), x = c.getContext('2d');
   if (x && x.createImageData) { const im = x.createImageData(FN, FN); for (let i = 0; i < f.length; i++) { const v = 255 - Math.round(f[i] * 255); im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = v; im.data[i * 4 + 3] = 255; } x.putImageData(im, 0, 0); }
   return c;
 }
@@ -1906,21 +1991,33 @@ function pickSymbol(cur) {
     const obs = new MutationObserver(() => { if (!document.body.contains(s.body)) { obs.disconnect(); fin(undefined); } }); obs.observe(document.body, { childList: true, subtree: true });
   });
 }
+/* 여러 칸 묶음 하나를 앞·뒤 두 묶음으로 나누기 (붙어 있는 서로 다른 교차 기호용) */
+function splitCluster(S, i) {
+  const c = S.clusters[i], w = c.w || 1; if (w < 2) return;
+  const a = Math.floor(w / 2), b = w - a, f = decF(c.f);
+  const half = (from, n) => { const g = new Float32Array(FN * FN), x0 = from / w * FN, sc = n / w; for (let y = 0; y < FN; y++) for (let x = 0; x < FN; x++) g[y * FN + x] = f[y * FN + Math.min(FN - 1, Math.floor(x0 + x * sc))]; return encF(g); };
+  const iA = S.clusters.length, iB = iA + 1;
+  S.clusters.push({ f: half(0, a), n: c.n, w: a, sym: suggest(decF(half(0, a)), a), ok: false }, { f: half(a, b), n: c.n, w: b, sym: suggest(decF(half(a, b)), b), ok: false });
+  const head = String.fromCharCode(48 + i), rep = String.fromCharCode(48 + iA) + '~'.repeat(a - 1) + String.fromCharCode(48 + iB) + '~'.repeat(b - 1);
+  S.rowsTop = S.rowsTop.map(l => l.split(head + '~'.repeat(w - 1)).join(rep));
+  c.n = 0;
+}
 /* 인식된 모양 하나하나를 기호에 연결하기 */
 function openSymAssign(S, onDone) {
   const foot = h('div', { class: 'sheetfoot' });
   const s = openSheet('기호 알려주기', { tall: true, footer: foot });
   const paint = () => {
-    const order = S.clusters.map((c, i) => i).sort((a, b) => S.clusters[b].n - S.clusters[a].n);
+    const order = S.clusters.map((c, i) => i).filter(i => S.clusters[i].n > 0).sort((a, b) => S.clusters[b].n - S.clusters[a].n);
     s.body.replaceChildren(
-      h('p', { class: 'hint' }, `${S.rows}단 × ${S.cols}코에서 모양 ${S.clusters.length}가지를 찾았어요.` + (S.gridOk ? '' : ' 격자선을 정확히 못 찾아서 칸을 고르게 나눴어요. 분홍 범위를 차트 테두리에 더 딱 맞추면 정확해져요.')),
-      h('p', { class: 'hint' }, '모양마다 어떤 기호인지 골라 주세요. 회색 “제안”은 사전과 비슷해서 미리 골라 둔 거예요. 케이블은 첫 칸 모양에 케이블 이름을, 나머지 칸 모양에는 “케이블 이어짐”을 골라 주세요.'),
+      h('p', { class: 'hint' }, `${S.rows}단 × ${S.cols}코에서 모양 ${S.clusters.filter(c => c.n > 0).length}가지를 찾았어요.` + (S.gridOk ? '' : ' 격자선을 정확히 못 찾아서 칸을 고르게 나눴어요. 분홍 범위를 차트 테두리에 더 딱 맞추면 정확해져요.')),
+      h('p', { class: 'hint' }, '모양마다 어떤 기호인지 골라 주세요. 회색 “제안”은 사전과 비슷해서 미리 골라 둔 거예요. 교차뜨기처럼 칸을 넘어가는 기호는 여러 칸이 한 묶음으로 잡혀요.'),
       ...order.map(i => { const c = S.clusters[i], sym = dict.symbols[c.sym];
-        return h('div', { class: 'symrow' }, featThumb(c.f), h('div', { style: 'flex:1;min-width:0' }, h('div', {}, sym ? sym.name : '아직 모름'), h('div', { class: 'small muted' }, `${c.n}칸` + (sym && !c.ok ? ' · 제안' : ''))),
-          h('button', { class: 'btn sm' + (sym ? '' : ' pri'), onclick: async () => { const id = await pickSymbol(c.sym); if (!id) return; c.sym = id; c.ok = true; const fc = decF(c.f); S.clusters.forEach(o => { if (o !== c && !o.ok && fdist(decF(o.f), fc) < .05) o.sym = id; }); paint(); } }, sym ? '바꾸기' : '고르기'));
+        return h('div', { class: 'symrow' }, featThumb(c.f, 40, c.w || 1), h('div', { style: 'flex:1;min-width:0' }, h('div', {}, sym ? sym.name : '아직 모름'), h('div', { class: 'small muted' }, ((c.w || 1) > 1 ? `${c.w}칸짜리 기호 · ${c.n}번` : `${c.n}칸`) + (sym && !c.ok ? ' · 제안' : ''))),
+          (c.w || 1) >= 2 ? h('button', { class: 'btn sm', title: '서로 다른 기호 두 개가 붙어서 한 묶음으로 잡혔을 때', onclick: () => { splitCluster(S, i); paint(); } }, '둘로 나누기') : null,
+          h('button', { class: 'btn sm' + (sym ? '' : ' pri'), onclick: async () => { const id = await pickSymbol(c.sym); if (!id) return; c.sym = id; c.ok = true; const fc = decF(c.f); S.clusters.forEach(o => { if (o !== c && !o.ok && (o.w || 1) === (c.w || 1) && fdist(decF(o.f), fc) < .05) o.sym = id; }); paint(); } }, sym ? '바꾸기' : '고르기'));
       }));
   };
-  const finish = () => { S.clusters.forEach(c => { const sym = dict.symbols[c.sym]; if (sym && !['knit', 'none'].includes(sym.id)) { c.ok = true; addSample(sym, c.f); } }); saveDict(); s.close(); onDone && onDone(); };
+  const finish = () => { S.clusters.forEach(c => { const sym = dict.symbols[c.sym]; if (sym && !['knit', 'none'].includes(sym.id)) { c.ok = true; addSample(sym, c.f, c.w || 1); } }); saveDict(); s.close(); onDone && onDone(); };
   foot.append(h('button', { class: 'btn pri', style: 'flex:1', onclick: finish }, '확인'));
   paint();
 }
@@ -1929,7 +2026,7 @@ async function openDict() {
   const paint = () => s.body.replaceChildren(
     h('button', { class: 'btn pri', style: 'width:100%;margin-bottom:10px', onclick: async () => { if (await editSymbol(null)) paint(); } }, '＋ 새 기호 만들기'),
     ...Object.values(dict.symbols).sort((a, b) => a.name.localeCompare(b.name)).map(x => h('div', { class: 'symrow' },
-      x.samples && x.samples[0] ? featThumb(x.samples[0]) : h('span', { class: 'fthumb', style: 'width:40px;height:40px' }),
+      x.samples && x.samples[0] ? featThumb(x.samples[0], 40, sampLen(x.samples[0])) : h('span', { class: 'fthumb', style: 'width:40px;height:40px' }),
       h('div', { style: 'flex:1;min-width:0' }, h('div', {}, x.name), h('div', { class: 'small muted' }, `${kindLabel(x.kind)} · 샘플 ${(x.samples || []).length}개${x.photo ? ' · 사진' : ''}`)),
       h('button', { class: 'btn sm', onclick: async () => { if (await editSymbol(x)) paint(); } }, '고치기'),
       x.builtin ? null : h('button', { class: 'btn sm danger', onclick: async () => { if (await askConfirm(`“${x.name}” 기호를 사전에서 지울까요? 이 기호를 쓰는 도안은 “?”로 보여요.`, '지우기', true)) { delete dict.symbols[x.id]; saveDict(); paint(); } } }, '지우기'))));
