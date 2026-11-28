@@ -128,7 +128,7 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .splitpane canvas{position:relative;z-index:0}
 .ov{position:absolute;inset:0;pointer-events:none}
 .tint{position:absolute;left:0;right:0;background:rgba(90,120,100,.24)}
-.hl{position:absolute;left:0;right:0;background:rgba(255,222,0,.42);box-shadow:inset 0 2px 0 rgba(214,160,0,.85),inset 0 -2px 0 rgba(214,160,0,.85)}
+.hl{position:absolute;left:0;right:0;background:rgba(255,222,0,.45)}
 .mlayer{position:absolute;inset:0}
 .mlayer.edit{pointer-events:auto;cursor:crosshair}
 .mline{position:absolute;top:0;bottom:0;width:2px;transform:translateX(-50%);box-shadow:0 0 0 .5px rgba(255,255,255,.75)}
@@ -235,8 +235,10 @@ textarea.inp{min-height:180px;resize:vertical;line-height:1.55}
 .userline{font-size:13px;color:var(--muted);margin:-12px 0 18px}
 .symrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .fthumb{flex:none;border:1px solid var(--line);border-radius:6px;background:#fff;image-rendering:pixelated}
-.ci3{font-size:13px;line-height:1.35;margin-top:2px;color:var(--ink);cursor:pointer}
-.ci3 div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci3{align-self:stretch;max-width:100%;min-width:0;font-size:13px;line-height:1.35;margin-top:2px;color:var(--ink);cursor:pointer;pointer-events:auto;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;text-align:left;touch-action:pan-x}
+.ci3::-webkit-scrollbar{display:none}
+.ci3 div{white-space:nowrap;width:max-content;min-width:100%;text-align:center}
+.ci1 .stc{font-size:20px;margin-left:4px}
 .ci3 b{font-weight:700}
 .menuitem.on{font-weight:700}
 #toast{position:fixed;left:50%;transform:translate(-50%,12px);bottom:calc(env(safe-area-inset-bottom,0px) + 100px);z-index:80;display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:14px;background:var(--ink);color:var(--paper);font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:92%}
@@ -321,7 +323,7 @@ function syncText() {
     local: '기록은 이 기기에 저장돼요',
     slow: '동기화 서버에 연결 중이에요 · 기록은 이 기기에 먼저 저장돼요',
     synced: '내 계정에 동기화됨 · 다른 기기에서도 이어서 쓸 수 있어요',
-    error: '지금은 동기화가 안 돼요 · 기록은 이 기기에 저장돼 있고, 연결되면 자동으로 올라가요'
+    error: '지금은 동기화가 안 돼요 · 기록은 이 기기에 저장돼 있어요 · 눌러서 확인'
   })[syncState];
 }
 /* 지운 프로젝트 목록 (오프라인에서 지워도 나중에 서버에서도 지우도록 기억) */
@@ -350,7 +352,7 @@ async function flush() {
         const { error } = await sb.from('projects').upsert(all, { onConflict: 'user_id,id' });
         if (error) throw error;
         if (delRows.length) setDel(getDel().filter(d => !dels.some(x => x.id === d.id && x.t === d.t)));
-      } catch (e) { failed = true; rows.forEach(r => dirty.add(r.id)); if (sendDict) dictDirty = true; }
+      } catch (e) { failed = true; lastSyncErr = '올리기: ' + errText(e); rows.forEach(r => dirty.add(r.id)); if (sendDict) dictDirty = true; }
     }
     setSync(failed ? 'error' : 'synced');
     clearTimeout(retryT); if (failed) retryT = setTimeout(flush, 30000);
@@ -394,11 +396,39 @@ async function pull() {
     syncOn = true;
     await flush();
     return true;
-  } catch (e) { setSync('error'); clearTimeout(retryT); retryT = setTimeout(pull, 30000); return false; }
+  } catch (e) { lastSyncErr = '받기: ' + errText(e); setSync('error'); clearTimeout(retryT); retryT = setTimeout(pull, 30000); return false; }
+}
+let lastSyncErr = '';
+const errText = e => !e ? '' : [e.code, e.status, e.message || e.error_description || e.msg].filter(Boolean).join(' · ') || String(e);
+/* 로그인이 서버에서 유효한지 확인하고, 만료됐으면 새로 받아요 */
+async function checkSession() {
+  if (!sb || !navigator.onLine) return true;
+  try {
+    let { data, error } = await sb.auth.getUser();
+    if (!error && data && data.user) return true;
+    const r = await sb.auth.refreshSession();
+    if (!r.error && r.data && r.data.session) return true;
+    lastSyncErr = '로그인 확인: ' + errText(error || r.error);
+    return false;
+  } catch (e) { lastSyncErr = '로그인 확인: ' + errText(e); return true; }
+}
+async function relogin(msg) {
+  try { await sb.auth.signOut({ scope: 'local' }); } catch (e) {}
+  try { localStorage.removeItem('knit.lastUser'); } catch (e) {}
+  toast(msg || '로그인이 만료됐어요. 다시 로그인해 주세요');
+  setTimeout(() => location.reload(), 1200);
+}
+async function syncHelp() {
+  const r = await modal('동기화 상태', [h('p', {}, syncText()), lastSyncErr ? h('p', { class: 'hint', style: 'word-break:break-all' }, '이유: ' + lastSyncErr) : null,
+    h('p', { class: 'hint' }, '다시 시도해도 안 되면 다시 로그인하면 대부분 해결돼요. 이 기기의 기록은 지워지지 않고, 로그인하면 계정에 다시 올라가요.')].filter(Boolean),
+    [{ label: '다시 로그인', val: 'relogin' }, { label: '다시 시도', cls: 'pri', val: 'retry' }]);
+  if (r === 'retry') { setSync('slow'); if (await checkSession()) { await pull(); toast(syncState === 'synced' ? '동기화됐어요' : '아직 안 돼요 · 다시 로그인해 보세요'); } else relogin(); }
+  if (r === 'relogin') { try { await flush(); } catch (e) {} relogin('다시 로그인해 주세요'); }
 }
 async function startSync() {
   try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) {}
   if (!sb || !me) return;
+  if (!await checkSession()) { relogin(); return; }
   const slowT = setTimeout(() => { if (syncState !== 'synced') setSync('slow'); }, 8000);
   await pull();
   clearTimeout(slowT);
@@ -713,7 +743,7 @@ function buildHome() {
     h('div', { class: 'top' }, h('h1', { style: 'flex:1' }, '뜨개 단수 카운터'), h('button', { class: 'btn sm', onclick: openDict }, '기호 사전'), me ? h('button', { class: 'btn sm', onclick: logout }, '로그아웃') : null),
     h('div', { class: 'scroll' },
       h('p', { class: 'hero' }, '지금 뜨는 단에 ', h('span', { class: 'hlmark' }, '형광펜'), '을 칠해 드려요'),
-      h('p', { class: 'sync', id: 'syncline' }, syncText()),
+      h('p', { class: 'sync', id: 'syncline', role: 'button', style: 'cursor:pointer', onclick: syncHelp }, syncText()),
       me && me.email ? h('p', { class: 'userline' }, me.email + ' 계정') : null,
       list.length ? list.map(p => {
         const la = lastActivity(p);
@@ -1199,12 +1229,13 @@ function buildTracker(p, part, host) {
     const rpl = repPlanned(pt), totP = tot + rpl.x, doneCount = (pt.kind === 'chart' ? clamp(pt.cur - rs0, 0, tot) : doneMap(pt).size) + repDone(pt);
     barI.style.width = (totP ? Math.min(100, doneCount / totP * 100) : 0) + '%';
     const cnt = rpl.unk ? `누적 ${doneCount}단` : `${doneCount}/${totP}단`;
+    const infos = fin ? [] : rowInfoFor(pt, r), stTot = infos.reduce((a, t) => a + (t.st || 0), 0);
     c1.replaceChildren();
     if (fin) c1.append('완료 · 모든 단을 다 떴어요');
     else {
       const sd = sideOf(pt, r);
       const cl = (pt.kind === 'chart' ? (pt.counts || []) : pt.text.lines).find(L => r >= L.a && r <= L.b);
-      c1.append(...[h('b', {}, `${r}단`), ' ', h('span', { class: 'hlmark' }, sideLabel(pt, sd.rs)), ' ',
+      c1.append(...[h('b', {}, `${r}단`), stTot ? h('b', { class: 'stc' }, `${stTot}코`) : null, ' ', h('span', { class: 'hlmark' }, sideLabel(pt, sd.rs)), ' ',
         h('span', { class: 'dirchip' }, (sd.dir === 'rtl' ? '← 오른쪽' : '→ 왼쪽') + (pt.mode === 'round' ? ' · 원통' : '')),
         pt.kind === 'chart' && multiOf(pt.chart) ? ' ' : null, pt.kind === 'chart' && multiOf(pt.chart) ? h('span', { class: 'dirchip' }, multiOf(pt.chart) === 'seq' ? `범위 ${seqIndex(pt.chart, r).i + 1}/${ranges(pt.chart).length}` : ranges(pt.chart).map((x, i) => { const q = togLocal(pt.chart, x, r - rStart(pt.chart) + 1); return q.done ? `${i + 1}: 완료` : `${i + 1}: ${x.rowStart + q.row - 1}단`; }).join(' · ')) : null,
         cl && cl.s ? ' ' : null, cl && cl.s ? h('span', { class: 'dirchip' }, `${cl.s}코`) : null].filter(x => x !== null));
@@ -1213,8 +1244,7 @@ function buildTracker(p, part, host) {
         if (!await askConfirm(`${rb.from}~${rb.to}단 반복을 여기서 끝낼까요? 다음 단부터 이어서 떠요.`, '반복 끝내기')) return;
         const q = PT(); q.rcEnd = Object.assign({}, q.rcEnd, { [rb.id]: true }); if (q.kind === 'chart') q.cur = rb.to + 1; touch(P()); refresh(true); } }, '반복 끝내기') : null].filter(Boolean));
     }
-    const infos = fin ? [] : rowInfoFor(pt, r);
-    c3.hidden = !infos.length; c3.replaceChildren(...infos.map(t => h('div', {}, t.tag || '', h('b', {}, `${t.st}코`), t.delta ? ` (${t.delta > 0 ? '+' : ''}${t.delta})` : '', ' · ', t.text)));
+    c3.hidden = !infos.length; c3.replaceChildren(...infos.map(t => h('div', {}, t.tag || '', infos.length > 1 ? `${t.st}코 · ` : '', t.delta ? `(${t.delta > 0 ? '늘림 +' : '줄임 '}${t.delta}) ` : '', t.text)));
     c3.onclick = () => modal(`${r}단 뜨는 법`, infos.map(t => h('p', {}, (t.tag ? h('b', {}, t.tag) : ''), `총 ${t.st}코 · `, t.text, t.delta ? ` (콧수 ${t.delta > 0 ? '+' : ''}${t.delta})` : '')), [{ label: '닫기', cls: 'pri', val: null }]);
     const le = lastLog(pt);
     ctx.lastT = le ? le.t : null; ctx.relEl = null; c2.replaceChildren();
